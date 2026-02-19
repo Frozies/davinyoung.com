@@ -20,7 +20,7 @@ export default function BlogPostCard({
   return (
     <article className="group">
       <Link href={`/blog/${slug}`} className="block">
-        <div className="rounded-xl border border-border bg-surface p-6 transition-all duration-300 hover:border-amber/30 hover:shadow-[0_0_30px_-10px_rgba(245,158,11,0.15)]">
+        <div className="rounded-xl border border-border bg-surface p-7 sm:p-8 transition-all duration-300 hover:border-amber/30 hover:shadow-[0_0_30px_-10px_rgba(245,158,11,0.15)]">
           <div className="flex items-center gap-3 text-xs text-muted font-mono">
             <time dateTime={date}>{new Date(date).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</time>
             <span className="text-border">|</span>
