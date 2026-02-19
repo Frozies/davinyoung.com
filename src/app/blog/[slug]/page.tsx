@@ -6,6 +6,7 @@ import rehypeShiki from "@shikijs/rehype";
 import rehypeSlug from "rehype-slug";
 import remarkGfm from "remark-gfm";
 import CodeBlock from "@/components/CodeBlock";
+import Checkbox from "@/components/Checkbox";
 import HeadingLink from "@/components/HeadingLink";
 import ReadingProgress from "@/components/ReadingProgress";
 import BackToTop from "@/components/BackToTop";
@@ -163,6 +164,8 @@ export default async function BlogPost({ params }: Props) {
                 h2: (props) => <HeadingLink as="h2" {...props} />,
                 h3: (props) => <HeadingLink as="h3" {...props} />,
                 h4: (props) => <HeadingLink as="h4" {...props} />,
+                input: (props) =>
+                  props.type === "checkbox" ? <Checkbox {...props} /> : <input {...props} />,
               }}
             />
           </div>
