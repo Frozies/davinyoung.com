@@ -1,0 +1,77 @@
+import ProjectCard from "./ProjectCard";
+
+const projects = [
+  {
+    name: "SecureTap",
+    role: "CTO & Co-Founder",
+    description:
+      "Blockchain-enabled product authentication platform using NFC tags and Hyperledger Fabric to combat counterfeiting. Patented technology. Demonstrated to 69+ companies including Fortune 500 brands.",
+    techStack: [
+      "Java",
+      "Spring Boot",
+      "Kotlin",
+      "Hyperledger Fabric",
+      "AWS",
+      "PostgreSQL",
+      "PostGIS",
+      "Docker",
+      "Next.js",
+      "React",
+      "NFC/NDEF",
+    ],
+    links: [
+      { label: "Website", href: "https://securetap.io" },
+      { label: "Patent 1 — US 12,437,308 B2", href: "https://patents.google.com/patent/US12437308B2/" },
+      { label: "Patent 2 — US 2025/0285126 A1", href: "https://patents.google.com/patent/US20250285126A1/" },
+    ],
+  },
+  {
+    name: "Sunset Vista Co.",
+    role: "Founder & Lead Developer",
+    description:
+      "Digital marketing agency serving Southwest Florida businesses. SEO, Shopify development, and web design for local businesses.",
+    techStack: ["Next.js", "Shopify Liquid", "Google Analytics", "SEO Tooling"],
+    links: [{ label: "Website", href: "https://sunsetvista.co" }],
+    highlights: [
+      "Zak's Jewelry — Custom Shopify store, ad analytics, conversion optimization",
+      "Petal Patch Florist — Shopify e-commerce build for Cape Coral florist",
+    ],
+  },
+  {
+    name: "Home Lab Infrastructure",
+    role: "Personal Project",
+    description:
+      "Multi-server home lab running Docker, Traefik reverse proxy, Tailscale VPN mesh, self-hosted services, CI/CD pipelines with GitHub Actions and self-hosted runners.",
+    techStack: [
+      "Ubuntu Server",
+      "Docker",
+      "Traefik",
+      "Tailscale",
+      "GitHub Actions",
+      "Nginx",
+      "PostgreSQL",
+    ],
+    links: [{ label: "GitHub", href: "https://github.com/Frozies" }],
+  },
+];
+
+export default function Projects() {
+  return (
+    <section id="projects" className="py-24 sm:py-32">
+      <div className="mx-auto max-w-6xl px-6">
+        <div className="animate-fade-up">
+          <h2 className="text-3xl sm:text-4xl font-bold text-white">Projects</h2>
+          <p className="mt-4 text-muted max-w-xl">
+            Products, platforms, and infrastructure I&apos;ve built from the ground up.
+          </p>
+        </div>
+
+        <div className="mt-12 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {projects.map((project) => (
+            <ProjectCard key={project.name} {...project} />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}

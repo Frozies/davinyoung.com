@@ -1,0 +1,124 @@
+const skillGroups = [
+  {
+    category: "Languages",
+    skills: ["Java", "Kotlin", "TypeScript", "JavaScript", "Python", "Rust", "SQL"],
+  },
+  {
+    category: "Backend",
+    skills: ["Spring Boot", "Node.js", "Hyperledger Fabric", "PostgreSQL", "PostGIS"],
+  },
+  {
+    category: "Frontend",
+    skills: ["React", "Next.js", "Shopify Liquid", "Tailwind CSS"],
+  },
+  {
+    category: "Infrastructure",
+    skills: ["AWS (multi-account)", "Docker", "Traefik", "Tailscale", "GitHub Actions", "LocalStack"],
+  },
+  {
+    category: "Other",
+    skills: ["NFC/NDEF", "Blockchain (Hyperledger Fabric)", "Patent Development"],
+  },
+];
+
+const links = [
+  { label: "GitHub", href: "https://github.com/Frozies" },
+  { label: "LinkedIn", href: "https://linkedin.com/in/davin-young-engineer" },
+  { label: "SecureTap", href: "https://securetap.io" },
+  { label: "Sunset Vista Co.", href: "https://sunsetvista.co" },
+];
+
+export default function About() {
+  return (
+    <section id="about" className="py-24 sm:py-32 border-t border-border">
+      <div className="mx-auto max-w-6xl px-6">
+        <div className="animate-fade-up">
+          <h2 className="text-3xl sm:text-4xl font-bold text-white">About</h2>
+        </div>
+
+        <div className="mt-12 grid gap-12 lg:grid-cols-[1fr,1.2fr]">
+          {/* Bio */}
+          <div className="animate-fade-up animation-delay-100 space-y-5 text-muted leading-relaxed">
+            <p>
+              I&apos;m Davin Young — a Staff Software Engineer, CTO, and founder based in
+              Southwest Florida. I build systems that verify trust, from blockchain
+              authentication platforms to Shopify stores for local businesses.
+            </p>
+            <p>
+              As CTO and co-founder of{" "}
+              <a
+                href="https://securetap.io"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-amber hover:text-amber-light transition-colors"
+              >
+                SecureTap
+              </a>
+              , I architected a patented NFC + blockchain platform that&apos;s been demoed
+              to 69+ companies including Nike, Adidas, Louis Vuitton, Amazon, and Pfizer. I
+              also run{" "}
+              <a
+                href="https://sunsetvista.co"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-amber hover:text-amber-light transition-colors"
+              >
+                Sunset Vista Co.
+              </a>
+              , a digital marketing agency serving SWFL businesses.
+            </p>
+            <p>
+              I&apos;m most at home deep in infrastructure — wiring up Hyperledger Fabric
+              networks, debugging Docker containers at 2am, or setting up CI/CD pipelines. I
+              hold two granted patents in authentication technology.
+            </p>
+            <p>
+              When I&apos;m not coding, you&apos;ll find me tweaking my home lab, playing
+              World of Tanks, or working on electronics projects.
+            </p>
+
+            {/* Links */}
+            <div className="flex flex-wrap gap-4 pt-4">
+              {links.map((link) => (
+                <a
+                  key={link.href}
+                  href={link.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-sm text-amber hover:text-amber-light transition-colors"
+                >
+                  {link.label}
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </a>
+              ))}
+            </div>
+          </div>
+
+          {/* Skills */}
+          <div className="animate-fade-up animation-delay-200 space-y-6">
+            <h3 className="text-lg font-semibold text-white">Tech Stack</h3>
+            {skillGroups.map((group) => (
+              <div key={group.category}>
+                <p className="text-xs font-mono font-semibold text-amber mb-2 uppercase tracking-wider">
+                  {group.category}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {group.skills.map((skill) => (
+                    <span
+                      key={skill}
+                      className="inline-block px-3 py-1.5 text-xs font-mono text-muted bg-surface rounded-md border border-border hover:border-border-hover hover:text-foreground transition-colors"
+                    >
+                      {skill}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}

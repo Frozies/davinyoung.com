@@ -1,0 +1,70 @@
+---
+title: "My 2025 Home Lab Setup: Docker, Traefik, and Tailscale"
+date: "2025-02-01"
+excerpt: "A walkthrough of my multi-server home lab running Docker containers, Traefik reverse proxy, Tailscale mesh VPN, and self-hosted CI/CD with GitHub Actions runners."
+tags:
+  - Home Lab
+  - DevOps
+  - Engineering
+---
+
+Every engineer needs a lab. Here's mine.
+
+## The Hardware
+
+Nothing fancy — two refurbished Dell OptiPlex machines and a Raspberry Pi 4:
+
+- **Node 1** (OptiPlex 7060): Primary Docker host, 32GB RAM, 1TB NVMe
+- **Node 2** (OptiPlex 5070): Secondary host + database server, 16GB RAM, 512GB SSD + 2TB HDD
+- **Pi 4**: DNS (Pi-hole), monitoring dashboards
+
+## The Stack
+
+### Networking: Tailscale + Traefik
+
+Tailscale gives me a mesh VPN across all nodes with zero port forwarding. Every service is accessible via `*.tail.net` addresses from any of my devices.
+
+Traefik sits in front of everything as a reverse proxy with automatic Let's Encrypt certificates:
+
+```yaml
+# docker-compose.yml (Traefik)
+services:
+  traefik:
+    image: traefik:v3
+    command:
+      - "--providers.docker=true"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
+    ports:
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./certs:/certs
+```
+
+### CI/CD: Self-Hosted GitHub Actions Runners
+
+I run self-hosted GitHub Actions runners on Node 1. This gives me faster builds (no cold starts) and the ability to deploy directly to my local infrastructure:
+
+```yaml
+# .github/workflows/deploy.yml
+jobs:
+  deploy:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose pull && docker compose up -d
+```
+
+### Services I Self-Host
+
+- **Gitea** — Git server (mirror of my GitHub repos)
+- **Uptime Kuma** — Monitoring and status page
+- **Postgres** — Shared database for various projects
+- **Nginx** — Static site hosting for experiments
+
+## Why Bother?
+
+A home lab isn't about saving money on cloud hosting. It's about understanding infrastructure at a deeper level. When you've debugged a Traefik routing issue at 2am, you understand reverse proxies differently than someone who just reads the docs.
+
+It's also a great testing ground. Every new tool I evaluate for work gets tested here first.
