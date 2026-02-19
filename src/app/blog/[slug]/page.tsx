@@ -3,6 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { MDXRemote } from "next-mdx-remote/rsc";
 import rehypeShiki from "@shikijs/rehype";
+import remarkGfm from "remark-gfm";
+import CodeBlock from "@/components/CodeBlock";
 import { getAllSlugs, getPostBySlug } from "@/lib/mdx";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
@@ -136,11 +138,13 @@ export default async function BlogPost({ params }: Props) {
               source={post.content}
               options={{
                 mdxOptions: {
+                  remarkPlugins: [remarkGfm],
                   rehypePlugins: [
                     [rehypeShiki, { theme: "github-dark-default" }],
                   ],
                 },
               }}
+              components={{ pre: CodeBlock }}
             />
           </div>
         </article>
