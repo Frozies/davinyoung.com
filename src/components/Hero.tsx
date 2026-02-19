@@ -2,15 +2,18 @@ import Link from "next/link";
 
 export default function Hero() {
   return (
-    <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
+    <section
+      className="relative min-h-screen flex items-center justify-center overflow-hidden"
+      aria-label="Introduction"
+    >
       {/* Animated grid background */}
-      <div className="absolute inset-0 bg-grid" />
+      <div className="absolute inset-0 bg-grid" aria-hidden="true" />
 
       {/* Gradient overlay */}
-      <div className="absolute inset-0 bg-gradient-to-b from-background via-transparent to-background" />
+      <div className="absolute inset-0 bg-gradient-to-b from-background via-transparent to-background" aria-hidden="true" />
 
       {/* Ambient glow */}
-      <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] bg-amber/5 rounded-full blur-[120px]" />
+      <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] bg-amber/5 rounded-full blur-[120px]" aria-hidden="true" />
 
       <div className="relative z-10 mx-auto max-w-4xl px-6 text-center">
         <div className="animate-fade-up">
@@ -34,13 +37,13 @@ export default function Hero() {
           </p>
         </div>
 
-        <div className="animate-fade-up animation-delay-300 mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
+        <nav className="animate-fade-up animation-delay-300 mt-10 flex flex-col sm:flex-row items-center justify-center gap-4" aria-label="Primary actions">
           <Link
             href="/#projects"
             className="inline-flex items-center gap-2 px-6 py-3 bg-amber text-background font-semibold text-sm rounded-lg hover:bg-amber-light transition-colors"
           >
             View Projects
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
           </Link>
@@ -49,11 +52,11 @@ export default function Hero() {
             className="inline-flex items-center gap-2 px-6 py-3 border border-border text-foreground font-semibold text-sm rounded-lg hover:border-border-hover hover:bg-surface transition-colors"
           >
             Read the Blog
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
           </Link>
-        </div>
+        </nav>
       </div>
     </section>
   );

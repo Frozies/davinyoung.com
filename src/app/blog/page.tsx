@@ -8,7 +8,17 @@ import BlogPostCard from "@/components/BlogPostCard";
 export const metadata: Metadata = {
   title: "Blog",
   description:
-    "Thoughts on blockchain, DevOps, infrastructure, Shopify, startup life, and engineering from Davin Young.",
+    "Articles on software engineering, DevOps, infrastructure, e-commerce, startup lessons, and building real products — by Davin Young.",
+  alternates: {
+    canonical: "https://davinyoung.com/blog",
+  },
+  openGraph: {
+    title: "Blog | Davin Young",
+    description:
+      "Articles on software engineering, DevOps, infrastructure, e-commerce, startup lessons, and building real products.",
+    url: "https://davinyoung.com/blog",
+    type: "website",
+  },
 };
 
 export default function BlogIndex() {
@@ -24,15 +34,15 @@ export default function BlogIndex() {
               href="/"
               className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-white transition-colors mb-8"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
               Back home
             </Link>
             <h1 className="text-3xl sm:text-4xl font-bold text-white">Blog</h1>
             <p className="mt-4 text-muted max-w-xl">
-              Writing about blockchain, DevOps, home lab experiments, startup lessons,
-              and engineering.
+              Writing about software engineering, DevOps, home lab experiments, startup lessons,
+              and building real products.
             </p>
           </div>
 

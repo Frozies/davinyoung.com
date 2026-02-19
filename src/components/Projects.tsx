@@ -56,10 +56,10 @@ const projects = [
 
 export default function Projects() {
   return (
-    <section id="projects" className="py-24 sm:py-32">
+    <section id="projects" className="py-24 sm:py-32" aria-labelledby="projects-heading">
       <div className="mx-auto max-w-6xl px-6">
         <div className="animate-fade-up">
-          <h2 className="text-3xl sm:text-4xl font-bold text-white">Projects</h2>
+          <h2 id="projects-heading" className="text-3xl sm:text-4xl font-bold text-white">Projects</h2>
           <p className="mt-4 text-muted max-w-xl">
             Products, platforms, and infrastructure I&apos;ve built from the ground up.
           </p>
