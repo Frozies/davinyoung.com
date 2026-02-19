@@ -1346,22 +1346,10 @@ Edit the config:
 sudo -u openclaw nano /home/openclaw/.openclaw/openclaw.json
 ```
 
-#### 5.3.1 Remove Stray Root-Level Auth Keys
+#### 5.3.1 Root-Level Auth Block
 
-The wizard may have placed `mode` and `token` keys inside the root `auth` block. These belong under `gateway.auth`, not at the root. Remove them:
+The root `auth` block defines your provider profiles:
 
-**Before (broken):**
-```json
-  "auth": {
-    "mode": "token",
-    "token": "c4dab94d...",
-    "profiles": {
-      "anthropic:default": { ... }
-    }
-  },
-```
-
-**After (correct):**
 ```json
   "auth": {
     "profiles": {
@@ -1373,7 +1361,7 @@ The wizard may have placed `mode` and `token` keys inside the root `auth` block.
   },
 ```
 
-The gateway auth is correctly at `gateway.auth.mode` and `gateway.auth.token` — leave those as-is.
+Gateway-level auth (`gateway.auth.mode` and `gateway.auth.token`) is configured separately in the `gateway` block below.
 
 #### 5.3.2 Verify Gateway Security Settings
 
