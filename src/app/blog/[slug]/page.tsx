@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { MDXRemote } from "next-mdx-remote/rsc";
+import rehypeShiki from "@shikijs/rehype";
 import { getAllSlugs, getPostBySlug } from "@/lib/mdx";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
@@ -131,7 +132,16 @@ export default async function BlogPost({ params }: Props) {
           </header>
 
           <div className="prose max-w-none">
-            <MDXRemote source={post.content} />
+            <MDXRemote
+              source={post.content}
+              options={{
+                mdxOptions: {
+                  rehypePlugins: [
+                    [rehypeShiki, { theme: "github-dark-default" }],
+                  ],
+                },
+              }}
+            />
           </div>
         </article>
       </main>
