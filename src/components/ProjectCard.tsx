@@ -21,7 +21,7 @@ export default function ProjectCard({
   highlights,
 }: ProjectCardProps) {
   return (
-    <div className="group relative rounded-xl border border-border bg-surface p-7 sm:p-8 transition-all duration-300 hover:border-amber/30 hover:shadow-[0_0_30px_-10px_rgba(245,158,11,0.15)]">
+    <div className="group relative h-full flex flex-col rounded-xl border border-border bg-surface p-7 sm:p-8 transition-all duration-300 hover:border-amber/30 hover:shadow-[0_0_30px_-10px_rgba(245,158,11,0.15)]">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h3 className="text-xl font-bold text-white">{name}</h3>
@@ -62,7 +62,7 @@ export default function ProjectCard({
       )}
 
       {/* Tech stack tags */}
-      <div className="mt-5 flex flex-wrap gap-2">
+      <div className="mt-auto pt-5 flex flex-wrap gap-2">
         {techStack.map((tech) => (
           <span
             key={tech}

@@ -32,10 +32,22 @@ const projects = [
       "Digital marketing agency serving Southwest Florida businesses. SEO, Shopify development, and web design for local businesses.",
     techStack: ["Next.js", "Shopify Liquid", "Google Analytics", "SEO Tooling"],
     links: [{ label: "Website", href: "https://sunsetvista.co" }],
-    highlights: [
-      "Zak's Jewelry — Custom Shopify store, ad analytics, conversion optimization",
-      "Petal Patch Florist — Shopify e-commerce build for Cape Coral florist",
-    ],
+  },
+  {
+    name: "Zak's Jewelry",
+    role: "Lead Developer",
+    description:
+      "Custom Shopify storefront for a Southwest Florida jeweler. Built a conversion-optimized e-commerce experience with ad analytics integration and ongoing SEO.",
+    techStack: ["Shopify Liquid", "Google Analytics", "Google Ads", "SEO"],
+    links: [{ label: "Website", href: "https://zaksjewelry.com" }],
+  },
+  {
+    name: "Petal Patch Florist",
+    role: "Lead Developer",
+    description:
+      "Shopify e-commerce build for a Cape Coral florist. Designed and developed a full online storefront for local and delivery orders.",
+    techStack: ["Shopify Liquid", "Google Analytics", "SEO"],
+    links: [{ label: "Website", href: "https://petalpatchflorist.com" }],
   },
   {
     name: "Home Lab Infrastructure",
@@ -66,7 +78,7 @@ export default function Projects() {
           </p>
         </ScrollReveal>
 
-        <div className="mt-12 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-12 grid gap-6 md:grid-cols-2">
           {projects.map((project, i) => (
             <ScrollReveal key={project.name} delay={i * 100}>
               <ProjectCard {...project} />
