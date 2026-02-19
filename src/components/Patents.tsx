@@ -2,19 +2,42 @@ import PatentCard from "./PatentCard";
 
 const patents = [
   {
-    title: "Product Authentication via NFC & Distributed Ledgers",
+    title: "System, Method and Process for Product Verification and Authentication",
+    number: "US 12,314,963",
+    status: "Granted",
+    serial: "19/017891",
+    date: "May 27, 2025",
+    summary:
+      "Original non-provisional covering the core system and method for product authentication using NFC tags and a permissioned blockchain. Products receive unique cryptographic identifiers verified against an immutable ledger with each consumer tap.",
+    link: "https://patents.google.com/patent/US12314963B1/",
+  },
+  {
+    title: "System, Method and Process for Product Verification and Authentication",
     number: "US 12,437,308 B2",
     status: "Granted",
+    serial: "19/218464",
+    date: "October 7, 2025",
     summary:
-      "Enables products embedded with NFC tags to be uniquely identified and verified through a distributed ledger. When a user taps the tag with a smartphone, the system retrieves authentication data stored on a blockchain network to confirm the product's legitimacy.",
+      "Continuation with broad system and method claims expanding on the original patent. Covers the end-to-end authentication flow from NFC tag encoding through blockchain verification and consumer-facing certificate issuance.",
     link: "https://patents.google.com/patent/US12437308B2/",
   },
   {
-    title: "Supply Chain Traceability with Cryptographic Verification",
-    number: "US 2025/0285126 A1",
-    status: "Granted",
+    title: "System, Method and Process for Product Verification and Authentication",
+    number: "Pending",
+    status: "Pending",
+    serial: "19/187298",
+    date: "Filed April 23, 2025",
     summary:
-      "Cryptographic verification system for tracking products through the supply chain, ensuring provenance and authenticity at every handoff point.",
+      "Continuation directed to system claims for product verification and authentication within the ST.001 patent family.",
+  },
+  {
+    title: "System and Method for Encoding an NFC Tag for Use in Product Authentication and to Create an Immutable Tap Transaction Record",
+    number: "Pending (Pub. US 2025/0285126 A1)",
+    status: "Pending",
+    serial: "19/218492",
+    date: "Filed May 26, 2025",
+    summary:
+      "Continuation directed to NFC tag encoding embodiments — covers the process of writing unique cryptographic identifiers to tags and creating tap-unique URLs that produce sequential, immutable verification records using AES-128 encryption.",
     link: "https://patents.google.com/patent/US20250285126A1/",
   },
 ];
@@ -31,7 +54,7 @@ export default function Patents() {
             <h2 className="text-3xl sm:text-4xl font-bold text-white">Patents</h2>
           </div>
           <p className="mt-4 text-muted max-w-xl">
-            Granted inventions in product authentication and supply chain verification.
+            Four non-provisional filings in NFC-based product authentication. Two granted, two pending.
           </p>
         </div>
 
