@@ -133,6 +133,7 @@ export default function RootLayout({
     <html lang="en" className="dark">
       <head>
         <link rel="canonical" href="https://davinyoung.com" />
+        <link rel="alternate" type="application/rss+xml" title="Davin Young" href="/feed.xml" />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
