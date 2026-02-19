@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import { Manrope, JetBrains_Mono } from "next/font/google";
 import CommandPalette from "@/components/CommandPalette";
 import { getAllPosts } from "@/lib/mdx";
 import "./globals.css";
+
+const GA_MEASUREMENT_ID = "G-C02PT8CDSY";
 
 const manrope = Manrope({
   variable: "--font-manrope",
@@ -138,6 +141,18 @@ export default function RootLayout({
       <head>
         <link rel="canonical" href="https://davinyoung.com" />
         <link rel="alternate" type="application/rss+xml" title="Davin Young" href="/feed.xml" />
+        <Script
+          src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
+          strategy="afterInteractive"
+        />
+        <Script id="google-analytics" strategy="afterInteractive">
+          {`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', '${GA_MEASUREMENT_ID}');
+          `}
+        </Script>
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
