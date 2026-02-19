@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Manrope, JetBrains_Mono } from "next/font/google";
+import CommandPalette from "@/components/CommandPalette";
+import { getAllPosts } from "@/lib/mdx";
 import "./globals.css";
 
 const manrope = Manrope({
@@ -129,6 +131,8 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const blogPosts = getAllPosts().map((p) => ({ slug: p.slug, title: p.title }));
+
   return (
     <html lang="en" className="dark">
       <head>
@@ -145,6 +149,7 @@ export default function RootLayout({
         className={`${manrope.variable} ${jetbrainsMono.variable} font-sans antialiased`}
       >
         {children}
+        <CommandPalette blogPosts={blogPosts} />
       </body>
     </html>
   );

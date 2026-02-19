@@ -50,6 +50,15 @@ export default function Navigation() {
             </Link>
           ))}
 
+          {/* Cmd+K hint */}
+          <button
+            onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }))}
+            className="hidden lg:inline-flex items-center gap-1.5 px-2.5 py-1 text-xs text-muted bg-background rounded-md border border-border hover:border-border-hover hover:text-white transition-colors"
+            aria-label="Open command palette"
+          >
+            <kbd className="font-mono text-[11px]">⌘K</kbd>
+          </button>
+
           {/* Social icons */}
           <div className="flex items-center gap-3 ml-4 pl-4 border-l border-border">
             <a
