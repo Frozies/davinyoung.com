@@ -3,11 +3,12 @@
 import { useState } from "react";
 
 export default function Checkbox(props: React.InputHTMLAttributes<HTMLInputElement>) {
-  const [checked, setChecked] = useState(props.checked ?? false);
+  const { disabled, checked: defaultChecked, ...rest } = props;
+  const [checked, setChecked] = useState(defaultChecked ?? false);
 
   return (
     <input
-      {...props}
+      {...rest}
       type="checkbox"
       checked={checked}
       onChange={() => setChecked((prev) => !prev)}
