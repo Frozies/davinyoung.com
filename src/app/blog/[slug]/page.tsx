@@ -10,7 +10,9 @@ import HeadingLink from "@/components/HeadingLink";
 import ReadingProgress from "@/components/ReadingProgress";
 import BackToTop from "@/components/BackToTop";
 import TableOfContents from "@/components/TableOfContents";
-import { getAllSlugs, getPostBySlug, extractTOC } from "@/lib/mdx";
+import ReadingStats from "@/components/ReadingStats";
+import RelatedPosts from "@/components/RelatedPosts";
+import { getAllSlugs, getPostBySlug, extractTOC, getRelatedPosts } from "@/lib/mdx";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 
@@ -61,6 +63,8 @@ export default async function BlogPost({ params }: Props) {
   }
 
   const toc = extractTOC(post.content);
+  const wordCount = post.content.split(/\s+/).length;
+  const relatedPosts = getRelatedPosts(slug, post.tags);
 
   const blogPostingJsonLd = {
     "@context": "https://schema.org",
@@ -86,7 +90,7 @@ export default async function BlogPost({ params }: Props) {
       "@id": `https://davinyoung.com/blog/${slug}`,
     },
     keywords: post.tags.join(", "),
-    wordCount: post.content.split(/\s+/).length,
+    wordCount,
   };
 
   return (
@@ -111,7 +115,7 @@ export default async function BlogPost({ params }: Props) {
           </Link>
 
           <header className="mb-10">
-            <div className="flex items-center gap-3 text-xs text-muted font-mono mb-4">
+            <div className="flex flex-wrap items-center gap-3 text-xs text-muted font-mono mb-4">
               <time dateTime={post.date}>
                 {new Date(post.date).toLocaleDateString("en-US", {
                   year: "numeric",
@@ -120,7 +124,7 @@ export default async function BlogPost({ params }: Props) {
                 })}
               </time>
               <span className="text-border" aria-hidden="true">|</span>
-              <span>{post.readingTime}</span>
+              <ReadingStats wordCount={wordCount} readingTime={post.readingTime} />
             </div>
 
             <h1 className="text-3xl sm:text-4xl font-bold text-white leading-tight">
@@ -162,6 +166,8 @@ export default async function BlogPost({ params }: Props) {
               }}
             />
           </div>
+
+          <RelatedPosts posts={relatedPosts} />
         </article>
       </main>
       <Footer />

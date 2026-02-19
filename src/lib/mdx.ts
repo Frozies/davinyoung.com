@@ -102,6 +102,18 @@ export function extractTOC(content: string): TOCItem[] {
   return items;
 }
 
+export function getRelatedPosts(currentSlug: string, tags: string[], limit = 4): BlogPostMeta[] {
+  const all = getAllPosts();
+  return all
+    .filter((p) => p.slug !== currentSlug)
+    .sort((a, b) => {
+      const aOverlap = a.tags.filter((t) => tags.includes(t)).length;
+      const bOverlap = b.tags.filter((t) => tags.includes(t)).length;
+      return bOverlap - aOverlap;
+    })
+    .slice(0, limit);
+}
+
 export function getAllSlugs(): string[] {
   if (!fs.existsSync(BLOG_DIR)) {
     return [];
