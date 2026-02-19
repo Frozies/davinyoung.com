@@ -75,6 +75,33 @@ export function getPostBySlug(slug: string): BlogPost | null {
   };
 }
 
+export interface TOCItem {
+  id: string;
+  text: string;
+  level: number;
+}
+
+export function extractTOC(content: string): TOCItem[] {
+  const headingRegex = /^(#{2,4})\s+(.+)$/gm;
+  const items: TOCItem[] = [];
+  let match;
+
+  while ((match = headingRegex.exec(content)) !== null) {
+    const level = match[1].length;
+    const text = match[2]
+      .replace(/\*\*(.*?)\*\*/g, "$1")
+      .replace(/`(.*?)`/g, "$1")
+      .trim();
+    const id = text
+      .toLowerCase()
+      .replace(/[^\w\s-]/g, "")
+      .replace(/\s+/g, "-");
+    items.push({ id, text, level });
+  }
+
+  return items;
+}
+
 export function getAllSlugs(): string[] {
   if (!fs.existsSync(BLOG_DIR)) {
     return [];

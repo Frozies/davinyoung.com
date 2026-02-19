@@ -3,9 +3,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { MDXRemote } from "next-mdx-remote/rsc";
 import rehypeShiki from "@shikijs/rehype";
+import rehypeSlug from "rehype-slug";
 import remarkGfm from "remark-gfm";
 import CodeBlock from "@/components/CodeBlock";
-import { getAllSlugs, getPostBySlug } from "@/lib/mdx";
+import HeadingLink from "@/components/HeadingLink";
+import ReadingProgress from "@/components/ReadingProgress";
+import BackToTop from "@/components/BackToTop";
+import TableOfContents from "@/components/TableOfContents";
+import { getAllSlugs, getPostBySlug, extractTOC } from "@/lib/mdx";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 
@@ -55,6 +60,8 @@ export default async function BlogPost({ params }: Props) {
     notFound();
   }
 
+  const toc = extractTOC(post.content);
+
   const blogPostingJsonLd = {
     "@context": "https://schema.org",
     "@type": "BlogPosting",
@@ -88,8 +95,10 @@ export default async function BlogPost({ params }: Props) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(blogPostingJsonLd) }}
       />
+      <ReadingProgress />
       <Navigation />
       <main className="pt-24 pb-16">
+        <TableOfContents items={toc} />
         <article className="mx-auto max-w-3xl px-6">
           <Link
             href="/blog"
@@ -140,16 +149,23 @@ export default async function BlogPost({ params }: Props) {
                 mdxOptions: {
                   remarkPlugins: [remarkGfm],
                   rehypePlugins: [
+                    rehypeSlug,
                     [rehypeShiki, { theme: "github-dark-default" }],
                   ],
                 },
               }}
-              components={{ pre: CodeBlock }}
+              components={{
+                pre: CodeBlock,
+                h2: (props) => <HeadingLink as="h2" {...props} />,
+                h3: (props) => <HeadingLink as="h3" {...props} />,
+                h4: (props) => <HeadingLink as="h4" {...props} />,
+              }}
             />
           </div>
         </article>
       </main>
       <Footer />
+      <BackToTop />
     </>
   );
 }
