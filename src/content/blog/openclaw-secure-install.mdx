@@ -101,7 +101,7 @@ This guide assumes you are deploying a **fresh VM on VMware ESXi**. You will sta
 - **VMware ESXi** with web UI access and permissions to create/manage VMs.
 - A fresh installation of **Ubuntu 24.04 LTS Server** (minimal install preferred).
 - Root or sudo access for initial setup.
-- An existing **Traefik reverse proxy** on your network with Cloudflare DNS challenge for TLS (your `securetap-docker` setup).
+- An existing **Traefik reverse proxy** on your network with Cloudflare DNS challenge for TLS (your existing Traefik Docker setup).
 - A Tailscale account ([login.tailscale.com](https://login.tailscale.com)) — free for personal use with up to 100 devices.
 - SSH key pairs on your laptop and desktop(s) — we'll generate them if you don't have them yet.
 
@@ -111,7 +111,7 @@ This guide assumes you are deploying a **fresh VM on VMware ESXi**. You will sta
 
 - Commands prefixed with `#` are run as root or with `sudo`.
 - Commands prefixed with `$` are run as the dedicated `openclaw` user.
-- Replace `claw.sunsetvista.co` with your actual domain.
+- Replace `claw.example.com` with your actual domain.
 - Replace `<YOUR_SSH_PORT>` with the custom SSH port you choose (e.g., `2222`).
 - Replace placeholder tokens and passwords with real, randomly generated values.
 
@@ -405,7 +405,7 @@ If a laptop or desktop doesn't have an SSH key pair, generate one first:
 
 ```bash
 # On the machine that needs a key (use Ed25519 — it's the strongest option)
-ssh-keygen -t ed25519 -a 100 -C "davin@laptop-$(date +%Y%m%d)" -f ~/.ssh/id_ed25519
+ssh-keygen -t ed25519 -a 100 -C "user@laptop-$(date +%Y%m%d)" -f ~/.ssh/id_ed25519
 ```
 
 The `-a 100` flag increases the KDF rounds for the key passphrase, making brute-force harder. **Always set a passphrase** on your key — an unprotected private key on a stolen laptop gives the attacker direct server access.
@@ -517,7 +517,7 @@ Allow Tailscale traffic through (Tailscale manages its own interface `tailscale0
 sudo ufw allow in on tailscale0 comment "Tailscale overlay network"
 ```
 
-> **Note:** Port 18789 is only open to the Traefik host's LAN IP — not to the internet. Public access goes through Traefik (`claw.sunsetvista.co` on port 443), and private access goes through the Tailscale mesh. Tailscale traffic is always encrypted with WireGuard and authenticated via your Tailnet identity.
+> **Note:** Port 18789 is only open to the Traefik host's LAN IP — not to the internet. Public access goes through Traefik (`claw.example.com` on port 443), and private access goes through the Tailscale mesh. Tailscale traffic is always encrypted with WireGuard and authenticated via your Tailnet identity.
 
 Enable the firewall:
 
@@ -966,7 +966,7 @@ sudo tailscale serve --bg http://127.0.0.1:18789
 ```
 
 In this guide's architecture (cross-host Traefik), dashboard access is provided by:
-- **Traefik** at `https://claw.sunsetvista.co` (Phase 6) — for any device
+- **Traefik** at `https://claw.example.com` (Phase 6) — for any device
 - **SSH tunnel** from your laptop — for emergency/setup access (see Phase 4.5)
 
 #### 2.4.5 Remove Public SSH from Firewall
@@ -1250,7 +1250,7 @@ http://localhost:18789/#token=<your-token>
 Once Traefik is configured and the route is live:
 
 ```
-https://claw.sunsetvista.co/#token=<your-token>
+https://claw.example.com/#token=<your-token>
 ```
 
 Replace the token with the one from the wizard output.
@@ -1543,17 +1543,17 @@ Review the audit output carefully. Address any warnings or failures before proce
 
 ## Phase 6: Reverse Proxy — Traefik (Existing Infrastructure)
 
-> **Note:** Traefik is the primary way to access the OpenClaw dashboard in this setup. Because the gateway uses `bind=lan` (required for cross-host Traefik), Tailscale Serve is not available. If all your access is from Tailscale devices, you can still reach the dashboard directly at `http://10.0.0.91:18789` from within your LAN/tailnet, but Traefik provides TLS and security headers.
+> **Note:** Traefik is the primary way to access the OpenClaw dashboard in this setup. Because the gateway uses `bind=lan` (required for cross-host Traefik), Tailscale Serve is not available. If all your access is from Tailscale devices, you can still reach the dashboard directly at `http://10.0.0.X:18789` from within your LAN/tailnet, but Traefik provides TLS and security headers.
 
-This guide assumes you already run a **Traefik reverse proxy on a separate Docker host** with Cloudflare DNS challenge for TLS certificates — the same setup that fronts your other services. The OpenClaw VM (`10.0.0.91`) is a backend target, not a Traefik host. Nothing is installed on the OpenClaw VM in this phase.
+This guide assumes you already run a **Traefik reverse proxy on a separate Docker host** with Cloudflare DNS challenge for TLS certificates — the same setup that fronts your other services. The OpenClaw VM (`10.0.0.X`) is a backend target, not a Traefik host. Nothing is installed on the OpenClaw VM in this phase.
 
 ### 6.1 Architecture
 
 ```
-Internet → Cloudflare → Traefik host (Docker) → 10.0.0.91:18789 (OpenClaw VM)
-                         ├── claw.sunsetvista.co  → OpenClaw gateway
-                         ├── panel.games.sunsetvista.co → Pterodactyl
-                         ├── api.securetap.io → Spring Boot API
+Internet → Cloudflare → Traefik host (Docker) → 10.0.0.X:18789 (OpenClaw VM)
+                         ├── claw.example.com  → OpenClaw gateway
+                         ├── app.example.com → Your other services
+                         ├── api.example.com → Your API backend
                          └── ... other services
 ```
 
@@ -1563,7 +1563,7 @@ Traefik terminates TLS using Cloudflare-issued certificates, applies security he
 
 ### 6.2 Add the DNS Record in Cloudflare
 
-In your Cloudflare dashboard for `sunsetvista.co`:
+In your Cloudflare dashboard for `example.com`:
 
 1. Go to **DNS** → **Records** → **Add record**.
 2. **Type:** `A` (or `CNAME` if pointing to another hostname)
@@ -1575,12 +1575,12 @@ In your Cloudflare dashboard for `sunsetvista.co`:
 Verify the record resolves:
 
 ```bash
-dig claw.sunsetvista.co +short
+dig claw.example.com +short
 ```
 
 ### 6.3 Traefik Configuration
 
-These changes go on your **Traefik Docker host** (not the OpenClaw VM). The files are in your `securetap-docker/external/` directory.
+These changes go on your **Traefik Docker host** (not the OpenClaw VM). The files are in your Traefik config directory.
 
 #### 6.3.1 Router and Service — `config.yml`
 
@@ -1591,7 +1591,7 @@ Add the OpenClaw router and service to your existing Traefik file provider confi
 ```yaml
     # OpenClaw gateway
     claw-secure:
-      rule: "Host(`claw.sunsetvista.co`)"
+      rule: "Host(`claw.example.com`)"
       entryPoints:
         - https
       tls:
@@ -1609,7 +1609,7 @@ Add the OpenClaw router and service to your existing Traefik file provider confi
     claw-service:
       loadBalancer:
         servers:
-          - url: "http://10.0.0.91:18789"
+          - url: "http://10.0.0.X:18789"
         passHostHeader: true
 ```
 
@@ -1734,16 +1734,16 @@ After reloading Traefik and restarting the OpenClaw gateway:
 
 ```bash
 # From your laptop — test through Cloudflare + Traefik
-curl -I https://claw.sunsetvista.co/
+curl -I https://claw.example.com/
 
 # From the Traefik host — test direct LAN access
-curl -s -o /dev/null -w "%{http_code}" http://10.0.0.91:18789/
+curl -s -o /dev/null -w "%{http_code}" http://10.0.0.X:18789/
 
 # From the OpenClaw VM — test localhost still works
 curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:18789/
 ```
 
-You should see HTTPS responses with all security headers through `claw.sunsetvista.co`, and HTTP 200/401 responses on the direct LAN and localhost checks (depending on whether the token is provided).
+You should see HTTPS responses with all security headers through `claw.example.com`, and HTTP 200/401 responses on the direct LAN and localhost checks (depending on whether the token is provided).
 
 ### 6.9 Pair Your Browser (Device Authentication)
 
@@ -1752,7 +1752,7 @@ When you first open the dashboard through Traefik, the gateway enforces device p
 **Step 1:** Open the dashboard in your browser with the gateway token:
 
 ```
-https://claw.sunsetvista.co/#token=<YOUR_GATEWAY_TOKEN>
+https://claw.example.com/#token=<YOUR_GATEWAY_TOKEN>
 ```
 
 Replace `<YOUR_GATEWAY_TOKEN>` with the token from `gateway.auth.token` in your config. You can retrieve it with:
@@ -2088,7 +2088,7 @@ Configure daily email reports:
 sudo tee /etc/logwatch/conf/logwatch.conf > /dev/null << 'LWEOF'
 Output = mail
 MailTo = admin@example.com
-MailFrom = logwatch@claw.sunsetvista.co
+MailFrom = logwatch@openclaw.example.com
 Detail = Med
 Range = yesterday
 Service = All
@@ -2315,7 +2315,7 @@ sudo -u openclaw bash -c 'source /home/openclaw/.openclaw/env && openclaw securi
 | Systemd security score | Quarterly | `sudo systemd-analyze security openclaw-gateway.service` |
 | Tailscale status check | Weekly | `tailscale status` |
 | Tailscale ACL review | Quarterly | Review ACLs in [admin console](https://login.tailscale.com/admin/acls) |
-| TLS certificate check | Monthly | `curl -vI https://claw.sunsetvista.co 2>&1 \| grep expire` |
+| TLS certificate check | Monthly | `curl -vI https://claw.example.com 2>&1 \| grep expire` |
 | Fail2Ban review | Weekly | `sudo fail2ban-client status sshd` |
 | Audit log review | Weekly | `sudo ausearch -k openclaw_home --start this-week` |
 
@@ -2694,9 +2694,9 @@ Use this checklist to verify every hardening step has been completed. Review it 
 
 ### Reverse Proxy (Traefik)
 
-- [ ] `claw.sunsetvista.co` DNS record created in Cloudflare
+- [ ] `claw.example.com` DNS record created in Cloudflare
 - [ ] Traefik router `claw-secure` added to `config.yml`
-- [ ] Traefik service `claw-service` points to `http://10.0.0.91:18789`
+- [ ] Traefik service `claw-service` points to `http://10.0.0.X:18789`
 - [ ] `certResolver: cloudflare` set on the TLS block
 - [ ] `default-headers` middleware applied (HSTS, XSS filter, nosniff, frame deny)
 - [ ] `https-redirectscheme` middleware applied (HTTP → HTTPS)
@@ -2704,7 +2704,7 @@ Use this checklist to verify every hardening step has been completed. Review it 
 - [ ] OpenClaw gateway `bind` set to `"lan"` (required for cross-host proxy)
 - [ ] UFW restricts port 18789 to Traefik host IP only
 - [ ] `trustedProxies` includes the Traefik host LAN IP
-- [ ] `curl -I https://claw.sunsetvista.co/` returns security headers
+- [ ] `curl -I https://claw.example.com/` returns security headers
 
 ### Systemd Service
 
