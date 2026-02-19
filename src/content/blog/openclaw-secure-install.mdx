@@ -1,0 +1,2763 @@
+---
+title: "Production-Grade OpenClaw Installation: A Security-First Guide for Ubuntu 24.04"
+date: "2026-02-17"
+excerpt: "A comprehensive, security-hardened guide to deploying OpenClaw on Ubuntu 24.04 LTS — covering OS hardening, Tailscale zero-trust networking, Traefik reverse proxy, systemd confinement, and monitoring."
+tags:
+  - DevOps
+  - Home Lab
+  - Engineering
+---
+
+## Introduction
+
+Self-hosting OpenClaw makes sense when you need full control over your AI agent infrastructure, want to avoid vendor lock-in, or operate in environments where cloud deployment isn't practical. OpenClaw is a powerful gateway platform that orchestrates autonomous agents, handles complex multi-step workflows, and provides a control UI for monitoring and directing behavior in real time. But with great capability comes the responsibility of defending it properly.
+
+This guide takes a security-first approach to deploying OpenClaw on Ubuntu 24.04 LTS. The philosophy here is defense-in-depth: every layer is hardened independently, under the assumption that any single layer might fail. Your OS is locked down before OpenClaw is even installed. Networking access is restricted by Tailscale's zero-trust mesh, which sits alongside traditional firewall controls. The gateway itself is configured with the strictest auth and sandboxing settings available. And the systemd service that runs it all is confined using Linux security primitives that would prevent privilege escalation even if a vulnerability existed in OpenClaw itself.
+
+This guide is opinionated. Every default leans toward maximum security at the cost of convenience. Once you understand what each control protects, you can relax individual settings based on your specific threat model and operational needs. But starting strict and relaxing selectively is safer than starting permissive and hardening later, once an incident forces your hand.
+
+The installation follows 10 phases: bootstrap the VM in ESXi, harden the OS, set up Tailscale for zero-trust access, install Node.js and OpenClaw, harden OpenClaw's configuration, integrate with a reverse proxy, apply systemd security directives, set up monitoring and logging, establish backup and recovery procedures, and finally, create ongoing maintenance schedules. Each phase is self-contained enough that you can follow it step-by-step without skipping around. By the end, you will have a production-ready OpenClaw deployment that is as hardened as a self-hosted application can reasonably be.
+
+---
+
+# OpenClaw Secure Installation Guide for Ubuntu 24.04 LTS Server
+
+**Version:** 1.0
+**Date:** 2026-02-17
+**Target OS:** Ubuntu 24.04 LTS (Noble Numbat) Server
+**OpenClaw Requirement:** Node.js 22+
+
+---
+
+## Table of Contents
+
+1. [Overview and Threat Model](#overview-and-threat-model)
+2. [Prerequisites](#prerequisites)
+3. [Phase 0: ESXi Bootstrap — Get to a Real Terminal](#phase-0-esxi-bootstrap--get-to-a-real-terminal)
+4. [Phase 1: OS Hardening](#phase-1-os-hardening)
+5. [Phase 2: Tailscale Zero-Trust Networking](#phase-2-tailscale-zero-trust-networking)
+6. [Phase 3: Runtime Environment](#phase-3-runtime-environment)
+7. [Phase 4: OpenClaw Installation](#phase-4-openclaw-installation)
+8. [Phase 5: Security Hardening of OpenClaw](#phase-5-security-hardening-of-openclaw)
+9. [Phase 6: Reverse Proxy — Traefik](#phase-6-reverse-proxy--traefik-existing-infrastructure)
+10. [Phase 7: Systemd Service Hardening](#phase-7-systemd-service-hardening)
+11. [Phase 8: Monitoring and Logging](#phase-8-monitoring-and-logging)
+12. [Phase 9: Backup and Recovery](#phase-9-backup-and-recovery)
+13. [Phase 10: Ongoing Maintenance](#phase-10-ongoing-maintenance)
+14. [Appendix A: Complete Hardened openclaw.json Reference](#appendix-a-complete-hardened-openclawjson-reference)
+15. [Appendix B: Security Checklist](#appendix-b-security-checklist)
+
+---
+
+## Overview and Threat Model
+
+This guide walks through a production-grade, security-hardened installation of OpenClaw on a dedicated Ubuntu 24.04 LTS server. It is opinionated: every default leans toward maximum security at the cost of convenience. You can relax individual controls after understanding what each one protects.
+
+### What This Guide Covers
+
+- Full OS-level hardening before any application software is installed.
+- Locked-down Node.js runtime environment under a dedicated service account.
+- OpenClaw installation with verified integrity.
+- Deep hardening of every OpenClaw security surface: authentication, network binding, sandboxing, filesystem permissions, tool restrictions, and logging.
+- TLS-terminating reverse proxy with modern security headers.
+- Systemd service confinement using Linux security primitives.
+- Monitoring, backup, and incident response procedures.
+
+### Threat Model Assumptions
+
+This guide assumes the following operating conditions:
+
+| Assumption | Detail |
+|---|---|
+| **Internet-facing server** | The host is reachable from the public internet, either directly or behind a load balancer. |
+| **Multi-user environment** | More than one person or system will interact with the OpenClaw gateway. |
+| **Defense in depth** | No single control is trusted to be sufficient. Every layer assumes the layer above it has been compromised. |
+| **Untrusted network** | All traffic between clients and the server traverses networks you do not control. |
+| **Principle of least privilege** | Every process, user, and service runs with the minimum permissions required. |
+| **Sensitive workloads** | Agent sessions may process confidential data. Session transcripts are treated as sensitive. |
+
+> **Warning:** If you are running OpenClaw on a personal laptop for local development only, this guide is more restrictive than you need. The official quick-start documentation is sufficient for that use case. This guide targets production deployments where a compromise has real consequences.
+
+---
+
+## Prerequisites
+
+### Hypervisor Environment
+
+This guide assumes you are deploying a **fresh VM on VMware ESXi**. You will start from the ESXi web UI, bootstrap SSH access into the VM, and then move to your laptop/desktop terminal for the rest of the guide.
+
+### VM Specifications
+
+| Resource | Minimum | Recommended |
+|---|---|---|
+| CPU | 2 vCPUs | 4 vCPUs |
+| RAM | 4 GB | 8 GB |
+| Disk | 40 GB (thin provisioned) | 80 GB (thin provisioned) |
+| Network | VMXNET3 adapter, connected to a port group with internet access |
+| Guest OS | Ubuntu Linux (64-bit) |
+
+### Software Requirements
+
+- **VMware ESXi** with web UI access and permissions to create/manage VMs.
+- A fresh installation of **Ubuntu 24.04 LTS Server** (minimal install preferred).
+- Root or sudo access for initial setup.
+- An existing **Traefik reverse proxy** on your network with Cloudflare DNS challenge for TLS (your `securetap-docker` setup).
+- A Tailscale account ([login.tailscale.com](https://login.tailscale.com)) — free for personal use with up to 100 devices.
+- SSH key pairs on your laptop and desktop(s) — we'll generate them if you don't have them yet.
+
+> **Note:** This guide assumes a fresh VM. If you are working on an existing system, audit the current state carefully before applying these changes. Existing services, firewall rules, or user accounts may conflict.
+
+### Conventions Used in This Guide
+
+- Commands prefixed with `#` are run as root or with `sudo`.
+- Commands prefixed with `$` are run as the dedicated `openclaw` user.
+- Replace `claw.sunsetvista.co` with your actual domain.
+- Replace `<YOUR_SSH_PORT>` with the custom SSH port you choose (e.g., `2222`).
+- Replace placeholder tokens and passwords with real, randomly generated values.
+
+---
+
+## Phase 0: ESXi Bootstrap — Get to a Real Terminal
+
+The ESXi web console is painful to work in — no copy/paste, no scroll, no resize. The goal of Phase 0 is to get SSH running on the VM as fast as possible so you can switch to a real terminal on your laptop or desktop for everything that follows.
+
+### 0.1 Create the VM in ESXi
+
+From the ESXi web UI (`https://your-esxi-host/ui`):
+
+1. **Create / Register VM** → Create a new virtual machine.
+2. **Name:** `openclaw-prod` (or your preferred name).
+3. **Compatibility:** ESXi 7.0+ / ESXi 8.0 virtual machine.
+4. **Guest OS family:** Linux → **Guest OS version:** Ubuntu Linux (64-bit).
+5. **Customize hardware:**
+   - CPU: **4** (or 2 minimum)
+   - Memory: **8 GB** (or 4 GB minimum)
+   - Hard disk 1: **80 GB**, thin provisioned
+   - Network Adapter 1: **VMXNET3**, connected to your port group
+   - CD/DVD Drive 1: **Datastore ISO file** → select your Ubuntu 24.04 Server ISO
+   - Check **Connect at power on** for the CD/DVD drive
+6. **Finish** and power on the VM.
+
+### 0.2 Install Ubuntu 24.04 LTS Server
+
+Open the VM console from the ESXi web UI and walk through the Ubuntu installer:
+
+1. **Language:** English
+2. **Keyboard:** Your layout
+3. **Installation type:** **Ubuntu Server (minimized)** — this is the smallest footprint
+4. **Network:** Configure your interface. Use a **static IP** if possible — it makes everything easier:
+   - Note down the IP address, gateway, and DNS. You will need the IP in about 2 minutes.
+   - If DHCP, that's fine — just check the assigned IP with `ip addr` after install.
+5. **Storage:** Use entire disk. Select **Set up this disk as an LVM group** and optionally **Encrypt the LVM group with LUKS** (recommended — see Phase 1.9).
+6. **Profile:**
+   - Your name: whatever you like
+   - Server name: `openclaw-prod`
+   - Username: pick your admin username (e.g., `davin`) — this is the account you will SSH into
+   - Password: set a strong temporary password (you'll disable password auth shortly)
+7. **SSH:** **Check "Install OpenSSH server"** — this is the critical step. The installer will install and enable `sshd` for you.
+8. **Featured snaps:** Skip all of them. We install everything manually.
+9. **Complete** the install and reboot.
+
+> **Warning:** Make sure you select **Install OpenSSH server** during the Ubuntu setup. If you miss this, you will have to install it from the ESXi web console afterwards, which is what we're trying to avoid.
+
+### 0.3 Grab the VM's IP Address
+
+After the VM reboots, log in via the ESXi web console one last time using the credentials you set during install.
+
+Get the IP address:
+
+```bash
+ip -4 addr show | grep inet | grep -v 127.0.0.1
+```
+
+Note the IP (e.g., `192.168.1.50` or whatever your network assigned). This is the last thing you need from the ESXi console.
+
+If you configured a static IP during install, you already know it.
+
+### 0.4 SSH In from Your Laptop
+
+Open a terminal on your laptop or desktop and connect:
+
+```bash
+ssh your-admin-username@192.168.1.50
+```
+
+Accept the host key fingerprint when prompted, enter the password you set during install.
+
+> **Note:** Yes, we are using password auth for this first connection. Phase 1 will disable password auth and switch to key-only. This is the bootstrap — you need one password login to deploy your keys.
+
+**You are now in a real terminal.** You can close the ESXi web console. Everything from here forward happens over SSH from your laptop/desktop.
+
+### 0.5 Verify SSH Is Running and Note the Basics
+
+Quick sanity check before moving on:
+
+```bash
+# Confirm SSH is running
+sudo systemctl status ssh
+
+# Confirm you have internet access (needed for all package installs)
+ping -c 3 1.1.1.1
+
+# Check the Ubuntu version
+lsb_release -a
+
+# Check available disk space
+df -h /
+```
+
+If all four commands pass, you are ready for Phase 1.
+
+> **Note:** If `ping` fails, you have a network issue to resolve in ESXi first — check your VM's port group, vSwitch, and gateway settings. OpenClaw installation requires internet access for downloading packages.
+
+### 0.6 (Optional) Install VMware Tools / open-vm-tools
+
+For better VM integration (graceful shutdown, time sync, host-guest communication):
+
+```bash
+sudo apt update && sudo apt install -y open-vm-tools
+```
+
+> **Note:** Do NOT install `open-vm-tools-desktop` — this is a headless server, there is no GUI.
+
+---
+
+## Phase 1: OS Hardening
+
+This phase is performed **before** installing OpenClaw or Node.js. The goal is to minimize the attack surface of the base operating system.
+
+### 1.1 System Update
+
+Start from the latest packages. Apply all pending security patches.
+
+```bash
+sudo apt update && sudo apt upgrade -y
+sudo apt autoremove -y
+```
+
+Reboot if a new kernel was installed:
+
+```bash
+sudo reboot
+```
+
+### 1.2 Create a Dedicated Service User
+
+OpenClaw will run under its own unprivileged user account. This user has no password and cannot log in directly via SSH with a password.
+
+```bash
+sudo useradd \
+  --system \
+  --create-home \
+  --home-dir /home/openclaw \
+  --shell /usr/sbin/nologin \
+  --comment "OpenClaw service account" \
+  openclaw
+```
+
+> **Note:** The shell is set to `/usr/sbin/nologin` to prevent interactive login. During installation steps that require an interactive shell, we will use `sudo -u openclaw bash` explicitly. After installation is complete, the `nologin` shell ensures the account cannot be used for interactive access.
+
+Lock the account password to prevent any password-based authentication:
+
+```bash
+sudo passwd -l openclaw
+```
+
+### 1.3 SSH Hardening
+
+SSH is the primary remote access vector. Every unnecessary feature is a potential attack surface.
+
+#### 1.3.1 Choose a Custom SSH Port
+
+Pick a non-standard port. This does not provide real security against targeted attacks, but it eliminates the vast majority of automated scanning noise.
+
+```bash
+export SSH_CUSTOM_PORT=2222
+```
+
+#### 1.3.2 Configure SSHD
+
+Back up the original configuration and write a hardened version:
+
+```bash
+sudo cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak.$(date +%Y%m%d)
+```
+
+Create a hardened drop-in configuration file:
+
+```bash
+sudo tee /etc/ssh/sshd_config.d/99-hardened.conf > /dev/null << 'SSHEOF'
+# --- OpenClaw Server SSH Hardening ---
+
+# Use a non-standard port to reduce automated scan noise
+Port 2222
+
+# Only listen on IPv4 (adjust if you need IPv6)
+AddressFamily inet
+
+# Disable root login entirely
+PermitRootLogin no
+
+# Disable password authentication — keys only
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+ChallengeResponseAuthentication no
+
+# Disable unused authentication methods
+GSSAPIAuthentication no
+KerberosAuthentication no
+
+# Limit authentication attempts and time window
+MaxAuthTries 3
+LoginGraceTime 30
+
+# Only allow specific users (add your admin username here)
+# AllowUsers your-admin-username
+
+# Disable X11 and agent forwarding
+X11Forwarding no
+AllowAgentForwarding no
+AllowTcpForwarding no
+
+# Disable unused features
+PermitTunnel no
+PermitUserEnvironment no
+PrintMotd no
+
+# Use strong key exchange, ciphers, and MACs
+KexAlgorithms sntrup761x25519-sha512@openssh.com,curve25519-sha256,curve25519-sha256@libssh.org
+Ciphers chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com
+MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com
+
+# Log authentication events
+LogLevel VERBOSE
+
+# Disconnect idle sessions after 10 minutes
+ClientAliveInterval 300
+ClientAliveCountMax 2
+
+# Limit concurrent unauthenticated connections
+MaxStartups 3:50:10
+SSHEOF
+```
+
+> **Warning:** Before restarting SSH, ensure you have your SSH key installed for your admin user. If you lock yourself out, you will need console access to recover. Test by opening a second terminal session and confirming key-based authentication works before closing your current session.
+
+Uncomment and set the `AllowUsers` directive with your actual admin username:
+
+```bash
+sudo sed -i 's/# AllowUsers your-admin-username/AllowUsers your-admin-username/' /etc/ssh/sshd_config.d/99-hardened.conf
+```
+
+#### 1.3.3 Deploy SSH Keys from Your Laptop and Desktops
+
+Since password authentication is disabled, you must install your SSH public keys **before** restarting SSHD. This section covers deploying keys from every machine you will use to administer this server.
+
+> **Warning:** Complete this step while you still have an active session. If you restart SSHD without at least one authorized key, you will be locked out and need console/VNC access to recover.
+
+**Option A: From each laptop/desktop using `ssh-copy-id` (easiest)**
+
+Run this from each machine you want to grant access from. Replace `your-admin-username` with the admin user on the server and `<SERVER_IP>` with the server's IP address:
+
+```bash
+# From your laptop:
+ssh-copy-id -i ~/.ssh/id_ed25519.pub -p 22 your-admin-username@<SERVER_IP>
+
+# From your desktop:
+ssh-copy-id -i ~/.ssh/id_ed25519.pub -p 22 your-admin-username@<SERVER_IP>
+```
+
+> **Note:** Use port `22` (the default) for the initial key deployment since we haven't restarted SSHD with the new port yet. After the SSH restart, you will use the custom port.
+
+If your key is RSA instead of Ed25519, substitute `~/.ssh/id_rsa.pub`. You can check what keys you have with `ls -la ~/.ssh/*.pub` on each machine.
+
+**Option B: Manual key deployment (if ssh-copy-id is unavailable)**
+
+On each laptop/desktop, display your public key:
+
+```bash
+cat ~/.ssh/id_ed25519.pub
+```
+
+Copy the output. Then on the server, paste all public keys into the authorized_keys file:
+
+```bash
+# Create the .ssh directory with correct permissions
+sudo mkdir -p /home/your-admin-username/.ssh
+sudo chmod 700 /home/your-admin-username/.ssh
+
+# Add your keys (one per line — repeat for each machine)
+sudo tee -a /home/your-admin-username/.ssh/authorized_keys > /dev/null << 'KEYEOF'
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA... your-laptop-label
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA... your-desktop-label
+KEYEOF
+
+# Lock down permissions
+sudo chmod 600 /home/your-admin-username/.ssh/authorized_keys
+sudo chown -R your-admin-username:your-admin-username /home/your-admin-username/.ssh
+```
+
+> **Note:** Replace the placeholder keys above with your actual public key contents. The comment at the end of each key (e.g., `your-laptop-label`) helps you identify which key belongs to which machine during audits.
+
+**Option C: Generate new keys on a machine that doesn't have one yet**
+
+If a laptop or desktop doesn't have an SSH key pair, generate one first:
+
+```bash
+# On the machine that needs a key (use Ed25519 — it's the strongest option)
+ssh-keygen -t ed25519 -a 100 -C "davin@laptop-$(date +%Y%m%d)" -f ~/.ssh/id_ed25519
+```
+
+The `-a 100` flag increases the KDF rounds for the key passphrase, making brute-force harder. **Always set a passphrase** on your key — an unprotected private key on a stolen laptop gives the attacker direct server access.
+
+Then deploy it using Option A or B above.
+
+**Verify key-based login works before proceeding:**
+
+Open a **new terminal** (keep the current session open as a safety net) and test:
+
+```bash
+# From your laptop — still using port 22 for now
+ssh -i ~/.ssh/id_ed25519 -p 22 your-admin-username@<SERVER_IP>
+```
+
+If you can log in without being prompted for a password, your key is correctly installed. Repeat from each machine.
+
+#### 1.3.4 Restart SSHD and Verify
+
+Now that keys are deployed, validate the configuration and restart:
+
+```bash
+sudo sshd -t && sudo systemctl restart ssh
+```
+
+Immediately test from a **new terminal** using the new custom port:
+
+```bash
+ssh -i ~/.ssh/id_ed25519 -p 2222 your-admin-username@<SERVER_IP>
+```
+
+> **Warning:** Do NOT close your existing session until you confirm the new connection works. If the new port or key setup has an issue, you can still fix it from the open session.
+
+#### 1.3.5 Install and Configure Fail2Ban
+
+Fail2Ban blocks IP addresses after repeated failed authentication attempts.
+
+```bash
+sudo apt install -y fail2ban
+```
+
+Create a local jail configuration:
+
+```bash
+sudo tee /etc/fail2ban/jail.local > /dev/null << 'F2BEOF'
+[DEFAULT]
+bantime = 3600
+findtime = 600
+maxretry = 3
+banaction = ufw
+
+[sshd]
+enabled = true
+port = 2222
+filter = sshd
+logpath = /var/log/auth.log
+maxretry = 3
+bantime = 3600
+F2BEOF
+```
+
+Enable and start:
+
+```bash
+sudo systemctl enable fail2ban
+sudo systemctl start fail2ban
+```
+
+Verify it is running:
+
+```bash
+sudo fail2ban-client status sshd
+```
+
+### 1.4 UFW Firewall Configuration
+
+The firewall defaults to denying all inbound traffic. Only explicitly required ports are opened.
+
+```bash
+sudo apt install -y ufw
+```
+
+Set default policies:
+
+```bash
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+```
+
+Allow SSH on the custom port:
+
+```bash
+sudo ufw allow 2222/tcp comment "SSH on custom port"
+```
+
+Allow the Traefik reverse proxy (on a separate host) to reach the OpenClaw gateway:
+
+```bash
+# Replace 10.0.0.TRAEFIK with your Traefik host's actual LAN IP
+sudo ufw allow from 10.0.0.TRAEFIK to any port 18789 proto tcp comment "Traefik to OpenClaw gateway"
+```
+
+> **Note:** Ports 80 and 443 are NOT opened on the OpenClaw VM. TLS termination and HTTPS happen on the Traefik Docker host, not here.
+
+Allow Tailscale traffic through (Tailscale manages its own interface `tailscale0`, but UFW needs to allow it):
+
+```bash
+# Allow all traffic on the Tailscale interface
+sudo ufw allow in on tailscale0 comment "Tailscale overlay network"
+```
+
+> **Note:** Port 18789 is only open to the Traefik host's LAN IP — not to the internet. Public access goes through Traefik (`claw.sunsetvista.co` on port 443), and private access goes through the Tailscale mesh. Tailscale traffic is always encrypted with WireGuard and authenticated via your Tailnet identity.
+
+Enable the firewall:
+
+```bash
+sudo ufw enable
+```
+
+Verify the rules:
+
+```bash
+sudo ufw status verbose
+```
+
+### 1.5 Automatic Security Updates
+
+Unattended-upgrades ensures critical patches are applied without manual intervention.
+
+```bash
+sudo apt install -y unattended-upgrades apt-listchanges
+```
+
+Configure to apply security updates automatically:
+
+```bash
+sudo tee /etc/apt/apt.conf.d/50unattended-upgrades > /dev/null << 'UUEOF'
+Unattended-Upgrade::Allowed-Origins {
+    "${distro_id}:${distro_codename}-security";
+    "${distro_id}ESMApps:${distro_codename}-apps-security";
+    "${distro_id}ESM:${distro_codename}-infra-security";
+};
+
+Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+Unattended-Upgrade::Remove-New-Unused-Dependencies "true";
+Unattended-Upgrade::Remove-Unused-Dependencies "true";
+Unattended-Upgrade::Automatic-Reboot "false";
+Unattended-Upgrade::Automatic-Reboot-Time "04:00";
+
+// Mail notifications (optional — set to your address)
+// Unattended-Upgrade::Mail "admin@example.com";
+// Unattended-Upgrade::MailReport "on-change";
+UUEOF
+```
+
+Enable the automatic update timer:
+
+```bash
+sudo tee /etc/apt/apt.conf.d/20auto-upgrades > /dev/null << 'AUTOEOF'
+APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Unattended-Upgrade "1";
+APT::Periodic::Download-Upgradeable-Packages "1";
+APT::Periodic::AutocleanInterval "7";
+AUTOEOF
+```
+
+Perform a dry run to verify the configuration:
+
+```bash
+sudo unattended-upgrades --dry-run --debug
+```
+
+### 1.6 Disable Unnecessary Services
+
+Reduce the running service footprint. On a minimal Ubuntu server install, most of these may already be absent, but verify explicitly.
+
+```bash
+# List all enabled services
+systemctl list-unit-files --state=enabled --type=service
+```
+
+Disable services that are not needed (adjust based on your audit):
+
+```bash
+# Disable Avahi/mDNS daemon if present (OpenClaw has its own mDNS — we disable that too)
+sudo systemctl disable --now avahi-daemon.service 2>/dev/null || true
+sudo systemctl disable --now avahi-daemon.socket 2>/dev/null || true
+
+# Disable CUPS if present
+sudo systemctl disable --now cups.service 2>/dev/null || true
+sudo systemctl disable --now cups-browsed.service 2>/dev/null || true
+
+# Disable ModemManager if present
+sudo systemctl disable --now ModemManager.service 2>/dev/null || true
+
+# Disable Bluetooth if present
+sudo systemctl disable --now bluetooth.service 2>/dev/null || true
+```
+
+### 1.7 Audit Logging with auditd
+
+The Linux audit subsystem provides tamper-resistant logging of security-relevant system events.
+
+```bash
+sudo apt install -y auditd audispd-plugins
+```
+
+Add rules to monitor critical paths:
+
+```bash
+sudo tee /etc/audit/rules.d/openclaw.rules > /dev/null << 'AUDITEOF'
+# Monitor the OpenClaw home directory for file changes
+-w /home/openclaw/ -p wa -k openclaw_home
+
+# Monitor authentication events
+-w /etc/pam.d/ -p wa -k pam_changes
+-w /etc/ssh/sshd_config -p wa -k sshd_config
+-w /etc/ssh/sshd_config.d/ -p wa -k sshd_config_drop
+
+# Monitor privilege escalation
+-w /etc/sudoers -p wa -k sudoers_change
+-w /etc/sudoers.d/ -p wa -k sudoers_change
+
+# Monitor user/group changes
+-w /etc/passwd -p wa -k identity
+-w /etc/group -p wa -k identity
+-w /etc/shadow -p wa -k identity
+
+# Monitor systemd service files
+-w /etc/systemd/system/ -p wa -k systemd_changes
+
+# Log all commands run by the openclaw user (UID will be set after user creation)
+# Replace 997 with the actual UID: id -u openclaw
+-a always,exit -F arch=b64 -F euid=997 -S execve -k openclaw_exec
+AUDITEOF
+```
+
+> **Note:** Replace `997` in the last rule with the actual UID of the `openclaw` user. Retrieve it with `id -u openclaw`.
+
+Update the UID in the audit rule:
+
+```bash
+OPENCLAW_UID=$(id -u openclaw)
+sudo sed -i "s/euid=997/euid=${OPENCLAW_UID}/" /etc/audit/rules.d/openclaw.rules
+```
+
+Load the rules and enable auditd:
+
+```bash
+sudo systemctl enable auditd
+sudo systemctl restart auditd
+sudo augenrules --load
+```
+
+Verify the rules are active:
+
+```bash
+sudo auditctl -l
+```
+
+### 1.8 Kernel Hardening via sysctl
+
+These sysctl parameters harden the network stack and restrict information leakage.
+
+```bash
+sudo tee /etc/sysctl.d/99-openclaw-hardening.conf > /dev/null << 'SYSEOF'
+# --- Network Stack Hardening ---
+
+# Disable IP forwarding (this is not a router)
+# NOTE: If you plan to use Tailscale as a subnet router or exit node, you
+# must set these to 1. For a standard Tailscale node (which is what this guide
+# configures), forwarding is NOT required and should stay disabled.
+net.ipv4.ip_forward = 0
+net.ipv6.conf.all.forwarding = 0
+
+# Enable SYN cookies to mitigate SYN flood attacks
+net.ipv4.tcp_syncookies = 1
+
+# Ignore ICMP redirects (prevent MITM routing attacks)
+net.ipv4.conf.all.accept_redirects = 0
+net.ipv4.conf.default.accept_redirects = 0
+net.ipv6.conf.all.accept_redirects = 0
+net.ipv6.conf.default.accept_redirects = 0
+
+# Do not send ICMP redirects
+net.ipv4.conf.all.send_redirects = 0
+net.ipv4.conf.default.send_redirects = 0
+
+# Ignore source-routed packets
+net.ipv4.conf.all.accept_source_route = 0
+net.ipv4.conf.default.accept_source_route = 0
+net.ipv6.conf.all.accept_source_route = 0
+net.ipv6.conf.default.accept_source_route = 0
+
+# Log martian packets (impossible source addresses)
+net.ipv4.conf.all.log_martians = 1
+net.ipv4.conf.default.log_martians = 1
+
+# Ignore broadcast ping requests (Smurf attack mitigation)
+net.ipv4.icmp_echo_ignore_broadcasts = 1
+
+# Ignore bogus ICMP error responses
+net.ipv4.icmp_ignore_bogus_error_responses = 1
+
+# Enable reverse path filtering (anti-spoofing)
+net.ipv4.conf.all.rp_filter = 1
+net.ipv4.conf.default.rp_filter = 1
+
+# --- Kernel Hardening ---
+
+# Restrict access to kernel logs
+kernel.dmesg_restrict = 1
+
+# Restrict access to kernel pointers in /proc
+kernel.kptr_restrict = 2
+
+# Disable magic SysRq key (prevents console-based attacks)
+kernel.sysrq = 0
+
+# Restrict ptrace to parent processes only
+kernel.yama.ptrace_scope = 2
+
+# Randomize memory layout (ASLR)
+kernel.randomize_va_space = 2
+
+# Restrict unprivileged user namespaces (reduces container escape risk)
+kernel.unprivileged_userns_clone = 0
+
+# --- Filesystem Hardening ---
+
+# Restrict creation of hard links and symlinks
+fs.protected_hardlinks = 1
+fs.protected_symlinks = 1
+fs.protected_fifos = 2
+fs.protected_regular = 2
+SYSEOF
+```
+
+Apply immediately:
+
+```bash
+sudo sysctl --system
+```
+
+### 1.9 Full-Disk Encryption (LUKS)
+
+> **Note:** Full-disk encryption must be configured at OS installation time. If your server was not installed with LUKS encryption, you cannot retroactively encrypt the root filesystem without a full reinstall. For cloud VMs, check your provider's encryption-at-rest options (e.g., AWS EBS encryption, GCP persistent disk encryption). The OpenClaw official documentation recommends full-disk encryption because the `~/.openclaw/` state directory contains credentials and session transcripts that are sensitive at rest.
+
+If you are provisioning a new server, select **encrypted LVM** during the Ubuntu installer's disk partitioning step.
+
+### 1.10 Verify AppArmor
+
+Ubuntu 24.04 ships with AppArmor enabled by default. Verify its status:
+
+```bash
+sudo aa-status
+```
+
+You should see output indicating AppArmor is loaded with profiles in enforce mode. If AppArmor is not active:
+
+```bash
+sudo apt install -y apparmor apparmor-utils
+sudo systemctl enable apparmor
+sudo systemctl start apparmor
+```
+
+> **Note:** A custom AppArmor profile for the OpenClaw process is an advanced step not covered in this guide. The systemd hardening in Phase 7 provides comparable confinement. If your compliance requirements mandate AppArmor profiles for all services, write one based on the syscall and filesystem access patterns observed during a test deployment.
+
+---
+
+## Phase 2: Tailscale Zero-Trust Networking
+
+Tailscale creates an encrypted WireGuard mesh network between your devices. Instead of exposing SSH and the OpenClaw gateway to the public internet, your laptop and desktops connect to the server over Tailscale's private overlay. This dramatically reduces your attack surface — SSH and the OpenClaw dashboard become invisible to the internet entirely.
+
+### Why Tailscale
+
+| Without Tailscale | With Tailscale |
+|---|---|
+| SSH port exposed to the internet (even on a custom port, it's discoverable) | SSH listens only on the Tailscale IP — unreachable from the internet |
+| OpenClaw dashboard requires a public domain + TLS + reverse proxy | Dashboard reachable only from tailnet devices and the Traefik LAN — invisible to the internet |
+| Fail2Ban is your only brute-force defense | No brute-force possible — Tailscale authenticates at the network layer before TCP connects |
+| You manage TLS certificates | WireGuard encryption is automatic and always-on |
+
+> **Note:** Tailscale complements the other hardening in this guide — it does not replace it. We keep all OS-level hardening, sandboxing, and OpenClaw security settings. Tailscale is an additional layer, consistent with defense-in-depth.
+
+### 2.1 Install Tailscale
+
+```bash
+curl -fsSL https://tailscale.com/install.sh -o /tmp/tailscale-install.sh
+```
+
+Inspect the script before running:
+
+```bash
+less /tmp/tailscale-install.sh
+```
+
+Install:
+
+```bash
+sudo bash /tmp/tailscale-install.sh
+rm /tmp/tailscale-install.sh
+```
+
+### 2.2 Generate a Pre-Authenticated Key
+
+Before joining the tailnet, generate an auth key so the server can re-authenticate automatically on reboot without requiring you to open a browser URL.
+
+1. Go to [login.tailscale.com/admin/settings/keys](https://login.tailscale.com/admin/settings/keys).
+2. Click **Generate auth key**.
+3. Check **Reusable** — allows the same key to be used after reboots.
+4. Set expiry to **No expiry** (or a long duration like 90 days if your security policy requires rotation).
+5. Copy the generated key (starts with `tskey-auth-`).
+
+> **Warning:** A no-expiry reusable auth key is a long-lived credential. Store it securely — anyone with this key can add a device to your tailnet. If the server is compromised, revoke the key immediately from the admin console. Consider using a 90-day expiry and rotating it alongside your other credentials if your threat model warrants it.
+
+### 2.3 Authenticate and Join Your Tailnet
+
+Use the pre-authenticated key so the node stays authenticated across reboots:
+
+```bash
+sudo tailscale up --ssh --authkey=tskey-auth-XXXXX
+```
+
+Replace `tskey-auth-XXXXX` with the key you generated in the previous step. The `--ssh` flag enables Tailscale SSH, which we will configure next.
+
+> **Note:** With an auth key, there is no browser URL step — the node joins the tailnet immediately. If you prefer interactive authentication instead (browser-based), omit `--authkey` and run `sudo tailscale up --ssh` — you will be given a URL to open in your browser each time the node needs to re-authenticate.
+
+Ensure `tailscaled` starts on boot:
+
+```bash
+sudo systemctl enable tailscaled
+```
+
+Verify the server has joined the tailnet:
+
+```bash
+tailscale status
+```
+
+You should see your server listed with a `100.x.y.z` Tailscale IP address. Note this IP — you will use it throughout the rest of this guide.
+
+```bash
+# Save the Tailscale IP for later use
+TAILSCALE_IP=$(tailscale ip -4)
+echo "Tailscale IPv4: ${TAILSCALE_IP}"
+```
+
+### 2.3 Join Your Laptop and Desktop to the Same Tailnet
+
+Install Tailscale on each machine you administer from:
+
+- **macOS/Linux laptop:** `curl -fsSL https://tailscale.com/install.sh | sh && sudo tailscale up`
+- **macOS app:** Download from [tailscale.com/download](https://tailscale.com/download)
+- **Windows desktop:** Download the MSI installer from [tailscale.com/download](https://tailscale.com/download)
+- **Linux desktop:** Same curl installer as the server
+
+After installation, run `tailscale up` on each device and authenticate through the same account/SSO provider. Verify all devices appear in your tailnet:
+
+```bash
+tailscale status
+```
+
+You should see your server, laptop, and desktop(s) all listed.
+
+### 2.4 Configure Tailscale SSH (Replace Traditional SSH)
+
+Tailscale SSH removes the need to manage SSH keys for server access entirely. Instead of key-based authentication, Tailscale verifies your identity through your tailnet identity provider at the network layer.
+
+> **Note:** This is a strict upgrade over traditional SSH key auth. Your Tailscale identity is tied to your SSO provider (Google, GitHub, Okta), which supports MFA. Traditional SSH keys are bearer tokens — anyone who copies the private key file gets access. Tailscale SSH eliminates this risk.
+
+#### 2.4.1 Configure Tailscale ACLs for SSH
+
+In the Tailscale admin console ([login.tailscale.com/admin/acls](https://login.tailscale.com/admin/acls)), add SSH rules:
+
+```json
+{
+  "ssh": [
+    {
+      "action": "check",
+      "src":    ["autogroup:member"],
+      "dst":    ["tag:server"],
+      "users":  ["your-admin-username"]
+    }
+  ]
+}
+```
+
+- `"action": "check"` — forces re-authentication every 12 hours (most secure). Use `"accept"` if you want persistent sessions.
+- `"src": ["autogroup:member"]` — allows all authenticated members of your tailnet.
+- `"dst": ["tag:server"]` — applies to devices tagged as `server`.
+- `"users": ["your-admin-username"]` — maps to the OS user on the server.
+
+Tag the server:
+
+```bash
+# In the Tailscale admin console, tag this machine as "server"
+# Or via CLI if you have admin API access:
+sudo tailscale up --ssh --advertise-tags=tag:server
+```
+
+> **Note:** Tailscale ACL tags control which devices can be accessed and by whom. This is the Tailscale equivalent of `AllowUsers` in SSHD. Configure it to be as restrictive as possible.
+
+#### 2.4.2 Test Tailscale SSH from Your Laptop
+
+From your laptop (which is on the same tailnet):
+
+```bash
+# Connect using the Tailscale hostname (no port, no key needed)
+ssh your-admin-username@your-server-hostname
+```
+
+Tailscale SSH uses the machine's tailnet hostname. You can find it with `tailscale status` on the server.
+
+If `action` is `"check"`, your browser will open for re-authentication on first connect. This is expected and is the MFA checkpoint.
+
+#### 2.4.3 Lock Down Traditional SSH to Tailscale Only
+
+Now that Tailscale SSH works, restrict traditional SSH to only listen on the Tailscale interface. This makes SSH completely invisible on the public internet:
+
+```bash
+sudo tee /etc/ssh/sshd_config.d/98-tailscale-only.conf > /dev/null << 'TSSHEOF'
+# Bind SSH to the Tailscale interface only.
+# This makes SSH unreachable from the public internet.
+# Access is only possible through the Tailscale mesh.
+# Keeping traditional SSHD as a fallback alongside Tailscale SSH.
+ListenAddress 100.64.0.0/10
+TSSHEOF
+```
+
+> **Warning:** The `100.64.0.0/10` CGNAT range covers all Tailscale IPs. However, `ListenAddress` requires a specific IP, not a CIDR. Use your server's actual Tailscale IP instead:
+
+```bash
+TAILSCALE_IP=$(tailscale ip -4)
+sudo tee /etc/ssh/sshd_config.d/98-tailscale-only.conf > /dev/null << TSSHEOF
+# Bind SSH only to the Tailscale interface
+# Makes SSH invisible on the public internet
+ListenAddress ${TAILSCALE_IP}
+
+# Also keep localhost for local debugging
+ListenAddress 127.0.0.1
+TSSHEOF
+
+sudo sshd -t && sudo systemctl restart ssh
+```
+
+> **Warning:** Verify you can still connect via Tailscale SSH before closing your current session. If you lose Tailscale connectivity, you will need console/VNC access to recover. Keep a console session available during this change.
+
+#### 2.4.4 Why Tailscale Serve Is NOT Used in This Setup
+
+> **Important:** Tailscale Serve (which proxies a local service over HTTPS to your tailnet) is **incompatible** with `gateway.bind: "lan"`. OpenClaw enforces that Tailscale Serve/Funnel requires `bind=loopback` (127.0.0.1). Since the Traefik reverse proxy runs on a **separate host** and must reach the gateway over the LAN, `bind=lan` is required — making Tailscale Serve unusable.
+
+If you ever move the reverse proxy to the **same host** as OpenClaw (or remove it entirely), you could switch to `bind=loopback` and enable Tailscale Serve:
+
+```bash
+# ONLY if bind=loopback (reverse proxy on same host or no reverse proxy):
+sudo tailscale serve --bg http://127.0.0.1:18789
+```
+
+In this guide's architecture (cross-host Traefik), dashboard access is provided by:
+- **Traefik** at `https://claw.sunsetvista.co` (Phase 6) — for any device
+- **SSH tunnel** from your laptop — for emergency/setup access (see Phase 4.5)
+
+#### 2.4.5 Remove Public SSH from Firewall
+
+Now that Tailscale SSH is working and SSH is bound to the Tailscale interface, you can safely remove the public-facing SSH firewall rule:
+
+```bash
+sudo ufw delete allow 2222/tcp
+sudo ufw status verbose
+```
+
+SSH is now only reachable through your Tailscale mesh — completely invisible to internet scanners.
+
+### 2.5 Enable Tailscale MagicDNS
+
+MagicDNS lets you reach your server by hostname instead of IP:
+
+```bash
+# Verify MagicDNS is enabled (it's on by default for most tailnets)
+tailscale status
+```
+
+You should be able to `ping your-server-hostname` from your laptop. If MagicDNS is disabled, enable it in the Tailscale admin console under DNS settings.
+
+### 2.6 Enable Key Expiry and Node Authorization
+
+In the Tailscale admin console:
+
+1. **Enable key expiry**: Ensure nodes must re-authenticate periodically. This prevents a stolen device from retaining access indefinitely.
+2. **Disable auto-approval for new devices**: Require manual approval when a new device joins the tailnet. This prevents an attacker who compromises your SSO from silently adding a device.
+3. **Enable Tailscale Lock** (optional, advanced): Tailscale Lock requires existing nodes to sign new nodes before they're trusted. This prevents even a compromised coordination server from injecting rogue nodes.
+
+```bash
+# Check if Tailscale Lock is available and enable it
+tailscale lock status
+```
+
+### 2.7 SSH Access Summary
+
+After completing this phase, your SSH access model looks like this:
+
+| Access Method | Status | How It Works |
+|---|---|---|
+| **Tailscale SSH (primary)** | Enabled | Identity verified by SSO/MFA through tailnet. No keys to manage. |
+| **Traditional SSH via Tailscale** | Enabled (fallback) | Key-based auth, but only reachable on the Tailscale IP. Emergency fallback if Tailscale SSH has issues. |
+| **Traditional SSH via public IP** | Disabled | SSHD does not listen on the public interface. Invisible to the internet. |
+| **SSH with password** | Disabled | Password auth is off in SSHD config. |
+
+Your SSH keys from Phase 1 still work as a fallback over the Tailscale interface. Tailscale SSH is the primary and preferred access method.
+
+---
+
+## Phase 3: Runtime Environment
+
+### 3.1 Install Node.js 22 via NodeSource
+
+OpenClaw requires Node.js 22 or newer. Install from the official NodeSource repository — not Snap, not the default Ubuntu repository (which ships an older version).
+
+```bash
+sudo apt install -y curl gnupg
+```
+
+Download and verify the NodeSource setup script:
+
+```bash
+curl -fsSL https://deb.nodesource.com/setup_22.x -o /tmp/nodesource_setup.sh
+```
+
+> **Warning:** Always inspect downloaded scripts before executing them. This is a critical security habit.
+
+Inspect the script:
+
+```bash
+less /tmp/nodesource_setup.sh
+```
+
+After review, execute it to add the NodeSource repository:
+
+```bash
+sudo bash /tmp/nodesource_setup.sh
+```
+
+Install Node.js:
+
+```bash
+sudo apt install -y nodejs
+```
+
+Verify the installation and version:
+
+```bash
+node --version
+# Expected: v22.x.x
+
+npm --version
+```
+
+#### 3.1.1 Verify Package Integrity
+
+Confirm the installed Node.js package was signed by NodeSource's GPG key:
+
+```bash
+apt-cache policy nodejs
+```
+
+Verify the repository key is present:
+
+```bash
+apt-key list 2>/dev/null | grep -i nodesource || gpg --list-keys --keyring /usr/share/keyrings/nodesource.gpg 2>/dev/null
+```
+
+> **Note:** On modern Ubuntu, repository keys are stored in `/usr/share/keyrings/` rather than the legacy apt-key store. The NodeSource setup script handles this correctly.
+
+### 3.2 Prepare the OpenClaw User Environment
+
+Create the directory structure with correct permissions before installation.
+
+```bash
+# Create the state directory
+sudo mkdir -p /home/openclaw/.openclaw
+sudo chown openclaw:openclaw /home/openclaw/.openclaw
+sudo chmod 700 /home/openclaw/.openclaw
+
+# Ensure the home directory itself is locked down
+sudo chmod 750 /home/openclaw
+sudo chown openclaw:openclaw /home/openclaw
+```
+
+### 3.3 Environment Variable Configuration
+
+Create an environment file that will be sourced by the systemd service and by interactive sessions.
+
+```bash
+sudo tee /home/openclaw/.openclaw/env > /dev/null << 'ENVEOF'
+# OpenClaw environment variables
+OPENCLAW_HOME=/home/openclaw/.openclaw
+OPENCLAW_STATE_DIR=/home/openclaw/.openclaw
+OPENCLAW_CONFIG_PATH=/home/openclaw/.openclaw/openclaw.json
+
+# Add OpenClaw binary to PATH (installed via npm global)
+export PATH="/home/openclaw/.npm-global/bin:$PATH"
+
+# Disable mDNS/Bonjour discovery at the environment level as a belt-and-suspenders measure
+OPENCLAW_DISABLE_BONJOUR=1
+
+# Node.js hardening
+NODE_ENV=production
+NODE_OPTIONS="--max-old-space-size=2048"
+ENVEOF
+
+sudo chown openclaw:openclaw /home/openclaw/.openclaw/env
+sudo chmod 600 /home/openclaw/.openclaw/env
+```
+
+---
+
+## Phase 4: OpenClaw Installation
+
+### 4.1 Download and Inspect the Install Script
+
+Never pipe a URL directly to bash without inspecting the contents first.
+
+```bash
+sudo -u openclaw bash -c 'curl -fsSL https://openclaw.ai/install.sh -o /tmp/openclaw-install.sh'
+```
+
+Review the script:
+
+```bash
+less /tmp/openclaw-install.sh
+```
+
+Items to verify during review:
+
+- The script downloads binaries from `openclaw.ai` or a known CDN.
+- No unexpected outbound connections to third-party domains.
+- No modifications to system-wide paths outside the user's home directory.
+- No `sudo` or root privilege escalation within the script.
+
+> **Warning:** If the script attempts to modify system-level files, request root permissions, or download from unexpected origins, do not proceed. Report the discrepancy to the OpenClaw maintainers.
+
+### 4.2 Execute the Installation
+
+Run the install script as the `openclaw` user:
+
+```bash
+sudo -u openclaw bash -c 'source /home/openclaw/.openclaw/env && bash /tmp/openclaw-install.sh'
+```
+
+Clean up the install script:
+
+```bash
+rm /tmp/openclaw-install.sh
+```
+
+### 4.3 Run the Onboarding Wizard
+
+The onboarding wizard sets up initial configuration and starts the daemon. It will ask several questions interactively:
+
+```bash
+sudo -u openclaw bash -c 'source /home/openclaw/.openclaw/env && openclaw onboard --install-daemon'
+```
+
+During the wizard, you will be prompted for the following. Here are the recommended answers:
+
+| Prompt | Recommended Answer | Why |
+|---|---|---|
+| **Gateway port** | `18789` | Default port. Traefik is already configured to proxy to this port. |
+| **Gateway auth** | `token` | Single random string, no username needed, harder to brute-force than a password. |
+| **Tailscale exposure** | `off` | **Must be `off`** when `bind=lan`. Tailscale Serve/Funnel requires `bind=loopback`, which is incompatible with cross-host Traefik. See [Section 2.4.4](#244-why-tailscale-serve-is-not-used-in-this-setup). |
+| **Reset Tailscale serve on exit** | `no` | (Only shown if exposure is not `off`.) Not applicable in this setup. |
+
+> **Note:** The wizard may also prompt for model provider API keys. Have your Anthropic API key (or other provider credentials) ready. These will be stored in the OpenClaw state directory. We will lock down file permissions in Phase 5.
+
+### 4.4 Enable Lingering and Install the Gateway Service
+
+OpenClaw runs as a **user-level systemd service** under the `openclaw` account. For user services to work without an interactive login session, you must enable lingering. Then install and start the gateway service.
+
+Enable lingering so the openclaw user's systemd session persists across reboots:
+
+```bash
+sudo loginctl enable-linger openclaw
+```
+
+The `openclaw` user's dbus session must be available for the gateway commands. Use the following pattern for all `openclaw` commands going forward:
+
+```bash
+sudo -u openclaw XDG_RUNTIME_DIR=/run/user/$(id -u openclaw) \
+  DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u openclaw)/bus \
+  bash -c 'source /home/openclaw/.openclaw/env && openclaw gateway install && openclaw gateway start'
+```
+
+> **Note:** The `XDG_RUNTIME_DIR` and `DBUS_SESSION_BUS_ADDRESS` variables are needed because `sudo -u` does not inherit the target user's systemd session. Without them, you will get `Failed to connect to bus: No medium found`. This is a one-time setup — once the gateway service is installed, it starts automatically on boot via the openclaw user's systemd.
+
+Verify the gateway is running:
+
+```bash
+ss -tlnp | grep 18789
+```
+
+You should see the gateway listening. If not, check the logs:
+
+```bash
+sudo -u openclaw XDG_RUNTIME_DIR=/run/user/$(id -u openclaw) \
+  DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u openclaw)/bus \
+  bash -c 'source /home/openclaw/.openclaw/env && openclaw gateway status'
+```
+
+For convenience, you can create a helper alias on your admin account:
+
+```bash
+echo 'alias oc="sudo -u openclaw XDG_RUNTIME_DIR=/run/user/\$(id -u openclaw) DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/\$(id -u openclaw)/bus bash -c \"source /home/openclaw/.openclaw/env && \$@\""' >> ~/.bashrc
+```
+
+### 4.5 Access the Dashboard
+
+After onboarding completes, the wizard prints a dashboard URL with an embedded token:
+
+```
+http://127.0.0.1:18789/#token=<your-token>
+```
+
+Since this is a headless server, you have two options to access it:
+
+**Option A: SSH tunnel (recommended for initial setup)**
+
+From your laptop, open an SSH tunnel over Tailscale:
+
+```bash
+ssh -N -L 18789:127.0.0.1:18789 claw
+```
+
+Then open in your browser:
+
+```
+http://localhost:18789/#token=<your-token>
+```
+
+**Option B: Traefik (after Phase 6 is complete)**
+
+Once Traefik is configured and the route is live:
+
+```
+https://claw.sunsetvista.co/#token=<your-token>
+```
+
+Replace the token with the one from the wizard output.
+
+> **Warning:** Save the dashboard token. You will need it to access the Control UI. The token is also stored in the OpenClaw config and can be retrieved later with `openclaw config get gateway.auth.token`.
+
+### 4.5 Web Search Setup (Optional)
+
+OpenClaw uses Brave Search for the `web_search` tool. Without a Brave Search API key, agents cannot search the web.
+
+If you want web search:
+
+1. Get a Brave Search API key from [brave.com/search/api](https://brave.com/search/api/).
+2. Configure it:
+
+```bash
+sudo -u openclaw bash -c 'source /home/openclaw/.openclaw/env && openclaw configure --section web'
+```
+
+Or set it as an environment variable by adding to `/home/openclaw/.openclaw/env`:
+
+```bash
+echo 'BRAVE_API_KEY=your-brave-api-key-here' | sudo tee -a /home/openclaw/.openclaw/env > /dev/null
+sudo chown openclaw:openclaw /home/openclaw/.openclaw/env
+sudo chmod 600 /home/openclaw/.openclaw/env
+```
+
+> **Note:** This is optional. Skip it if your agents don't need web search. You can always add it later.
+
+### 4.6 Verify Gateway Status
+
+Confirm the gateway started successfully:
+
+```bash
+sudo -u openclaw bash -c 'source /home/openclaw/.openclaw/env && openclaw gateway status'
+```
+
+You should see output indicating the gateway is running on `127.0.0.1:18789`.
+
+Verify with a direct HTTP check:
+
+```bash
+curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:18789/
+```
+
+> **Note:** At this point, the gateway is running with default settings. Phase 5 replaces the configuration with a fully hardened version.
+
+---
+
+## Phase 5: Security Hardening of OpenClaw
+
+This phase transforms the default OpenClaw configuration into a production-hardened deployment.
+
+### 5.1 Stop the Gateway
+
+Stop the running gateway before modifying the configuration:
+
+```bash
+sudo -u openclaw bash -c 'source /home/openclaw/.openclaw/env && openclaw gateway stop' 2>/dev/null || true
+```
+
+### 5.2 Generate a Strong Gateway Token
+
+Use the built-in token generator:
+
+```bash
+sudo -u openclaw bash -c 'source /home/openclaw/.openclaw/env && openclaw doctor --generate-gateway-token'
+```
+
+Copy the generated token. You will need it for the configuration file below and for any clients that connect to the gateway.
+
+If the built-in generator is unavailable, generate a 64-character hex token manually:
+
+```bash
+openssl rand -hex 32
+```
+
+Save this token securely. It is equivalent to a root password for the OpenClaw gateway.
+
+### 5.3 Harden the Existing Configuration
+
+> **Important:** Do NOT overwrite the config file. The onboarding wizard generated a working config with your API keys, Brave Search key, hooks, skills, and gateway settings. Instead, we edit specific keys to harden the existing config.
+
+Back up the current configuration:
+
+```bash
+sudo -u openclaw bash -c 'cp /home/openclaw/.openclaw/openclaw.json /home/openclaw/.openclaw/openclaw.json.bak.$(date +%Y%m%d)'
+```
+
+Edit the config:
+
+```bash
+sudo -u openclaw nano /home/openclaw/.openclaw/openclaw.json
+```
+
+#### 5.3.1 Remove Stray Root-Level Auth Keys
+
+The wizard may have placed `mode` and `token` keys inside the root `auth` block. These belong under `gateway.auth`, not at the root. Remove them:
+
+**Before (broken):**
+```json
+  "auth": {
+    "mode": "token",
+    "token": "c4dab94d...",
+    "profiles": {
+      "anthropic:default": { ... }
+    }
+  },
+```
+
+**After (correct):**
+```json
+  "auth": {
+    "profiles": {
+      "anthropic:default": {
+        "provider": "anthropic",
+        "mode": "api_key"
+      }
+    }
+  },
+```
+
+The gateway auth is correctly at `gateway.auth.mode` and `gateway.auth.token` — leave those as-is.
+
+#### 5.3.2 Verify Gateway Security Settings
+
+Confirm these keys are set correctly in the `gateway` block:
+
+| Key | Required Value | Why |
+|---|---|---|
+| `gateway.bind` | `"lan"` | Cross-host Traefik needs LAN access |
+| `gateway.port` | `18789` | Firewalled to Traefik host only |
+| `gateway.auth.mode` | `"token"` | Mandatory when `bind=lan` |
+| `gateway.auth.token` | (your token) | Generated during onboarding |
+| `gateway.auth.rateLimit` | (see below) | Prevents brute-force token guessing |
+| `gateway.tailscale.mode` | `"off"` | Incompatible with `bind=lan` |
+| `gateway.tailscale.resetOnExit` | `false` | No Tailscale Serve to reset |
+
+#### 5.3.2a Add Auth Rate Limiting
+
+When `bind=lan`, the gateway is network-accessible. Add rate limiting to prevent brute-force attacks on the auth token. Inside the `gateway.auth` block, add a `rateLimit` object:
+
+```json
+    "auth": {
+      "mode": "token",
+      "token": "<your-token>",
+      "rateLimit": {
+        "maxAttempts": 10,
+        "windowMs": 60000,
+        "lockoutMs": 300000
+      }
+    },
+```
+
+This allows 10 failed attempts per 60-second window, then locks out the source for 5 minutes (300000ms).
+
+#### 5.3.3 Fix Denied Commands
+
+The wizard generates placeholder `denyCommands` entries (like `camera.snap`, `calendar.add`) that don't match actual OpenClaw command names. OpenClaw uses **exact command-name matching only**, so invalid names are silently ignored.
+
+Replace the wizard defaults with actual command names. These block canvas/UI control commands that a headless server should never expose:
+
+```json
+    "nodes": {
+      "denyCommands": [
+        "canvas.present",
+        "canvas.hide",
+        "canvas.navigate",
+        "canvas.eval",
+        "canvas.snapshot",
+        "canvas.a2ui.push",
+        "canvas.a2ui.pushJSONL",
+        "canvas.a2ui.reset"
+      ]
+    }
+```
+
+> **Note:** Run `openclaw security audit` to verify no "ineffective" denyCommands warnings remain. If future OpenClaw versions add new risky commands, the audit will flag them.
+
+#### 5.3.4 Validate the Config
+
+After editing, validate that the config is accepted:
+
+```bash
+sudo -u openclaw bash -c 'source /home/openclaw/.openclaw/env && openclaw security audit'
+```
+
+If the audit reports unknown keys, run:
+
+```bash
+sudo -u openclaw bash -c 'source /home/openclaw/.openclaw/env && openclaw doctor --fix'
+```
+
+#### 5.3.5 Run the Deep Security Audit
+
+Once the config validates, run the deep security audit to check for additional hardening opportunities:
+
+```bash
+sudo -u openclaw bash -c 'source /home/openclaw/.openclaw/env && openclaw security audit --deep'
+```
+
+Review the output and apply any recommended changes. The audit may suggest additional settings that can be added to the config.
+
+### 5.4 Verify Gateway Binding
+
+The configuration above sets `gateway.bind: "lan"` because the Traefik reverse proxy runs on a separate host. Verify the binding and confirm token auth is active (mandatory for LAN binding):
+
+```bash
+sudo -u openclaw bash -c 'source /home/openclaw/.openclaw/env && grep -E "(bind|mode.*token)" /home/openclaw/.openclaw/openclaw.json'
+```
+
+Expected output should show `"lan"` for bind and `"token"` for auth mode. Both are required — LAN binding without token auth is a critical vulnerability.
+
+### 5.5 Lock Down File Permissions
+
+Apply the strictest permissions to the OpenClaw state directory and all contents:
+
+```bash
+# State directory: only the openclaw user can access it
+sudo chmod 700 /home/openclaw/.openclaw
+
+# Credentials directory: CRITICAL — must not be writable by others
+# The wizard creates this with 775; lock it down to 700.
+sudo chmod 700 /home/openclaw/.openclaw/credentials
+
+# Configuration file: readable/writable by owner only
+sudo chmod 600 /home/openclaw/.openclaw/openclaw.json
+
+# Lock down all credential files
+sudo find /home/openclaw/.openclaw -name "creds.json" -exec chmod 600 {} \;
+sudo find /home/openclaw/.openclaw -name "auth-profiles.json" -exec chmod 600 {} \;
+
+# Lock down session transcripts (contain sensitive conversation data)
+sudo find /home/openclaw/.openclaw -name "*.jsonl" -exec chmod 600 {} \;
+
+# Ensure all files are owned by the openclaw user
+sudo chown -R openclaw:openclaw /home/openclaw/.openclaw
+
+# Lock down the environment file
+sudo chmod 600 /home/openclaw/.openclaw/env
+```
+
+Verify permissions:
+
+```bash
+sudo ls -la /home/openclaw/.openclaw/
+```
+
+Expected output should show:
+
+```
+drwx------ openclaw openclaw  .openclaw/
+-rw------- openclaw openclaw  openclaw.json
+-rw------- openclaw openclaw  env
+```
+
+### 5.6 Run the Security Audit
+
+OpenClaw includes a built-in security audit tool. Run all three levels:
+
+Standard audit:
+
+```bash
+sudo -u openclaw bash -c 'source /home/openclaw/.openclaw/env && openclaw security audit'
+```
+
+Deep audit (probes the live gateway — start it temporarily):
+
+```bash
+sudo -u openclaw bash -c 'source /home/openclaw/.openclaw/env && openclaw gateway start'
+sleep 5
+sudo -u openclaw bash -c 'source /home/openclaw/.openclaw/env && openclaw security audit --deep'
+```
+
+Apply safe automatic fixes for any remaining issues:
+
+```bash
+sudo -u openclaw bash -c 'source /home/openclaw/.openclaw/env && openclaw security audit --fix'
+```
+
+Stop the gateway again (it will be managed by systemd after Phase 7):
+
+```bash
+sudo -u openclaw bash -c 'source /home/openclaw/.openclaw/env && openclaw gateway stop'
+```
+
+Review the audit output carefully. Address any warnings or failures before proceeding.
+
+---
+
+## Phase 6: Reverse Proxy — Traefik (Existing Infrastructure)
+
+> **Note:** Traefik is the primary way to access the OpenClaw dashboard in this setup. Because the gateway uses `bind=lan` (required for cross-host Traefik), Tailscale Serve is not available. If all your access is from Tailscale devices, you can still reach the dashboard directly at `http://10.0.0.91:18789` from within your LAN/tailnet, but Traefik provides TLS and security headers.
+
+This guide assumes you already run a **Traefik reverse proxy on a separate Docker host** with Cloudflare DNS challenge for TLS certificates — the same setup that fronts your other services. The OpenClaw VM (`10.0.0.91`) is a backend target, not a Traefik host. Nothing is installed on the OpenClaw VM in this phase.
+
+### 6.1 Architecture
+
+```
+Internet → Cloudflare → Traefik host (Docker) → 10.0.0.91:18789 (OpenClaw VM)
+                         ├── claw.sunsetvista.co  → OpenClaw gateway
+                         ├── panel.games.sunsetvista.co → Pterodactyl
+                         ├── api.securetap.io → Spring Boot API
+                         └── ... other services
+```
+
+Traefik terminates TLS using Cloudflare-issued certificates, applies security headers and HTTPS redirect middleware, and forwards plain HTTP to the OpenClaw gateway on the LAN. The OpenClaw VM never handles TLS directly.
+
+> **Warning:** Because Traefik runs on a different host, the OpenClaw gateway **cannot** bind to `loopback`. It must bind to `lan` so the Traefik host can reach it over the `10.0.0.x` network. Token authentication is **mandatory** when binding to LAN — this is already configured in Phase 5. This also means **Tailscale Serve cannot be used** — OpenClaw enforces `bind=loopback` when Tailscale Serve/Funnel is active, which is incompatible with cross-host proxying.
+
+### 6.2 Add the DNS Record in Cloudflare
+
+In your Cloudflare dashboard for `sunsetvista.co`:
+
+1. Go to **DNS** → **Records** → **Add record**.
+2. **Type:** `A` (or `CNAME` if pointing to another hostname)
+3. **Name:** `claw`
+4. **Content:** Your Traefik host's public IP (or the IP Cloudflare proxies to)
+5. **Proxy status:** Proxied (orange cloud) — Cloudflare terminates TLS at the edge
+6. **TTL:** Auto
+
+Verify the record resolves:
+
+```bash
+dig claw.sunsetvista.co +short
+```
+
+### 6.3 Traefik Configuration
+
+These changes go on your **Traefik Docker host** (not the OpenClaw VM). The files are in your `securetap-docker/external/` directory.
+
+#### 6.3.1 Router and Service — `config.yml`
+
+Add the OpenClaw router and service to your existing Traefik file provider config:
+
+**Router** (add to `http.routers`):
+
+```yaml
+    # OpenClaw gateway
+    claw-secure:
+      rule: "Host(`claw.sunsetvista.co`)"
+      entryPoints:
+        - https
+      tls:
+        certResolver: cloudflare
+      service: claw-service
+      middlewares:
+        - default-headers
+        - https-redirectscheme
+```
+
+**Service** (add to `http.services`):
+
+```yaml
+    # OpenClaw gateway service
+    claw-service:
+      loadBalancer:
+        servers:
+          - url: "http://10.0.0.91:18789"
+        passHostHeader: true
+```
+
+This follows the same pattern as your existing services. The `default-headers` middleware applies your standard security headers (HSTS, XSS filter, content-type nosniff, frame deny). The `https-redirectscheme` middleware forces HTTPS.
+
+#### 6.3.2 Static Config — `traefik.yml`
+
+No changes required to `traefik.yml`. The existing configuration already provides:
+- `:80` → `:443` HTTP-to-HTTPS redirect at the entrypoint level
+- Cloudflare DNS challenge cert resolver (`cloudflare` with ACME)
+- Cloudflare trusted IP ranges for `X-Forwarded-For` header accuracy
+- File provider watching `config.yml` for hot reload
+
+#### 6.3.3 Security Headers Already Applied
+
+Your existing `default-headers` middleware in `config.yml` covers:
+
+| Header | Value | Effect |
+|---|---|---|
+| `frameDeny` | `true` | Prevents clickjacking (X-Frame-Options: DENY) |
+| `browserXssFilter` | `true` | Enables browser XSS protection |
+| `contentTypeNosniff` | `true` | Prevents MIME-type sniffing |
+| `forceSTSHeader` | `true` | Forces Strict-Transport-Security |
+| `stsIncludeSubdomains` | `true` | HSTS covers all subdomains |
+| `stsPreload` | `true` | Eligible for browser HSTS preload list |
+| `stsSeconds` | `15552000` | HSTS max-age (~180 days) |
+| `X-Forwarded-Proto` | `https` | Backend knows the original protocol |
+
+> **Note:** Consider increasing `stsSeconds` to `31536000` (1 year) across all your services for stronger HSTS. 180 days is fine but 1 year is the preload list minimum.
+
+### 6.4 Reload Traefik
+
+If Traefik's file provider has `watch: true` (the default), it will pick up `config.yml` changes automatically. Otherwise, restart the Traefik container:
+
+```bash
+# On the Traefik Docker host
+docker restart traefik
+```
+
+### 6.5 Update OpenClaw Gateway Binding
+
+Since Traefik is on a separate host, the OpenClaw gateway must listen on the LAN interface. On the **OpenClaw VM**, update the gateway binding in `/home/openclaw/.openclaw/openclaw.json`:
+
+Change the `bind` value from `"loopback"` to `"lan"`:
+
+```json5
+  gateway: {
+    // Bind to the LAN interface so the Traefik reverse proxy (on a separate
+    // host) can reach the gateway. Token authentication is MANDATORY when
+    // binding to LAN — without it, anyone on the 10.0.0.x network can
+    // control agents and read session data.
+    bind: "lan",
+    port: 18789,
+    // ...
+  },
+```
+
+> **Warning:** `bind: "lan"` exposes the gateway to your entire LAN segment. This is safe **only because** token authentication is enforced (`auth.mode: "token"`). Without a token, any device on `10.0.0.0/24` could access the gateway. Verify token auth is configured before changing the binding.
+
+### 6.6 Restrict LAN Access with UFW
+
+Since the gateway now listens on the LAN, firewall it so only the Traefik host can reach port 18789. On the **OpenClaw VM**:
+
+```bash
+# Allow the Traefik host to reach the gateway
+# Replace 10.0.0.TRAEFIK with your Traefik host's LAN IP
+sudo ufw allow from 10.0.0.TRAEFIK to any port 18789 proto tcp comment "Traefik reverse proxy to OpenClaw"
+
+# Verify — port 18789 should only be open to the Traefik host
+sudo ufw status verbose
+```
+
+> **Note:** Do NOT use `sudo ufw allow 18789/tcp` — that opens the port to everyone. The `from` clause restricts it to the Traefik host only.
+
+### 6.7 Update Trusted Proxies in OpenClaw
+
+The OpenClaw gateway needs to trust `X-Forwarded-For` headers from Traefik. Edit the config on the **OpenClaw VM**:
+
+```bash
+sudo -u openclaw nano /home/openclaw/.openclaw/openclaw.json
+```
+
+Add `trustedProxies` as a **sibling** of `port`, `bind`, `auth`, `tailscale`, and `nodes` inside the `gateway` block — NOT inside the `nodes` block. Place it after the `nodes` closing brace:
+
+```json
+  "gateway": {
+    "port": 18789,
+    "mode": "local",
+    "bind": "lan",
+    "auth": { ... },
+    "tailscale": { ... },
+    "nodes": {
+      "denyCommands": [ ... ]
+    },
+    "trustedProxies": ["10.0.0.TRAEFIK"]
+  },
+```
+
+Replace `10.0.0.TRAEFIK` with your Traefik host's actual LAN IP. To find it:
+
+```bash
+ssh traefik hostname -I
+```
+
+> **Note:** `allowTailscale` is not set by the wizard, which means it defaults to `false` — correct for this setup. Only add it explicitly if the security audit flags it.
+
+Restart the gateway to pick up the config change:
+
+```bash
+sudo -u openclaw XDG_RUNTIME_DIR=/run/user/$(id -u openclaw) DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u openclaw)/bus bash -c 'source /home/openclaw/.openclaw/env && openclaw gateway install --force'
+```
+
+Verify it's listening:
+
+```bash
+ss -tlnp | grep 18789
+```
+
+### 6.8 Verify End-to-End
+
+After reloading Traefik and restarting the OpenClaw gateway:
+
+```bash
+# From your laptop — test through Cloudflare + Traefik
+curl -I https://claw.sunsetvista.co/
+
+# From the Traefik host — test direct LAN access
+curl -s -o /dev/null -w "%{http_code}" http://10.0.0.91:18789/
+
+# From the OpenClaw VM — test localhost still works
+curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:18789/
+```
+
+You should see HTTPS responses with all security headers through `claw.sunsetvista.co`, and HTTP 200/401 responses on the direct LAN and localhost checks (depending on whether the token is provided).
+
+### 6.9 Pair Your Browser (Device Authentication)
+
+When you first open the dashboard through Traefik, the gateway enforces device pairing. This is the `dmPolicy: "pairing"` security setting — each new browser/device must be approved before it can access the control UI.
+
+**Step 1:** Open the dashboard in your browser with the gateway token:
+
+```
+https://claw.sunsetvista.co/#token=<YOUR_GATEWAY_TOKEN>
+```
+
+Replace `<YOUR_GATEWAY_TOKEN>` with the token from `gateway.auth.token` in your config. You can retrieve it with:
+
+```bash
+sudo -u openclaw bash -c 'source /home/openclaw/.openclaw/env && grep -A2 '"'"'"auth"'"'"' /home/openclaw/.openclaw/openclaw.json' | grep token
+```
+
+**Step 2:** The browser will show a "pairing required" or "disconnected (1008): pairing required" message. Keep the browser open — the pairing request is now pending on the gateway.
+
+**Step 3:** On the OpenClaw VM, list pending node pairing requests:
+
+> **Important:** Browser/dashboard connections use `openclaw nodes`, NOT `openclaw pairing`. The `pairing` command is for DM channels (WhatsApp, Telegram, etc.). The `nodes` command handles gateway WebSocket connections including the Control UI.
+
+```bash
+sudo -u openclaw XDG_RUNTIME_DIR=/run/user/$(id -u openclaw) \
+  DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u openclaw)/bus \
+  bash -c 'source /home/openclaw/.openclaw/env && openclaw nodes pending'
+```
+
+This will show pending requests with a request ID for each.
+
+**Step 4:** Approve the pairing request:
+
+```bash
+sudo -u openclaw XDG_RUNTIME_DIR=/run/user/$(id -u openclaw) \
+  DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u openclaw)/bus \
+  bash -c 'source /home/openclaw/.openclaw/env && openclaw nodes approve <REQUEST_ID>'
+```
+
+Replace `<REQUEST_ID>` with the ID from the `nodes pending` output.
+
+**Step 5:** Refresh the browser. The dashboard should now load. The approval generates a fresh authentication token for the device.
+
+> **Note:** Each new browser or device you use to access the dashboard will require this pairing process. This is by design — it prevents unauthorized browsers from accessing the control UI even if they have the token. The pairing is stored persistently and survives gateway restarts.
+
+> **Tip:** The `XDG_RUNTIME_DIR` and `DBUS_SESSION_BUS_ADDRESS` environment variables are required for every `openclaw` command run via `sudo -u openclaw` because the gateway runs as a user-level systemd service. Consider adding a shell alias to simplify this (see below).
+
+#### Helper Alias (Optional)
+
+To avoid typing the full `sudo -u openclaw XDG_RUNTIME_DIR=...` prefix every time, add an alias to your `~/.bashrc` on the OpenClaw VM:
+
+```bash
+echo 'alias oc="sudo -u openclaw XDG_RUNTIME_DIR=/run/user/\$(id -u openclaw) DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/\$(id -u openclaw)/bus bash -c '\''source /home/openclaw/.openclaw/env && openclaw \$@'\'' -- "' >> ~/.bashrc
+source ~/.bashrc
+```
+
+Then you can run commands like:
+
+```bash
+oc gateway status
+oc pairing list
+oc security audit
+```
+
+---
+
+## Phase 7: Systemd Service Hardening
+
+Running the OpenClaw gateway under systemd with hardening directives provides process-level isolation using Linux kernel security features.
+
+### 7.1 Create the Systemd Unit File
+
+```bash
+sudo tee /etc/systemd/system/openclaw-gateway.service > /dev/null << 'UNITEOF'
+[Unit]
+Description=OpenClaw Gateway (Hardened)
+Documentation=https://openclaw.ai/docs
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# --- Process Identity ---
+User=openclaw
+Group=openclaw
+WorkingDirectory=/home/openclaw
+
+# --- Environment ---
+EnvironmentFile=/home/openclaw/.openclaw/env
+
+# --- Execution ---
+Type=simple
+ExecStart=/usr/bin/openclaw gateway start --foreground
+ExecStop=/usr/bin/openclaw gateway stop
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=30
+TimeoutStopSec=30
+
+# --- Resource Limits ---
+LimitNOFILE=65536
+LimitNPROC=512
+MemoryMax=2G
+CPUQuota=200%
+
+# --- Filesystem Hardening ---
+
+# Make the entire root filesystem read-only, then whitelist specific paths
+ProtectSystem=strict
+
+# Prevent access to /home, /root, and /run/user except for the service user
+ProtectHome=tmpfs
+
+# Allow write access only to the OpenClaw state directory
+ReadWritePaths=/home/openclaw/.openclaw
+ReadWritePaths=/tmp/openclaw
+
+# Bind-mount the openclaw home into the tmpfs /home
+BindPaths=/home/openclaw/.openclaw:/home/openclaw/.openclaw
+
+# Private /tmp for this service (isolated from other processes)
+PrivateTmp=true
+
+# --- Privilege Hardening ---
+
+# Prevent the process from gaining new privileges via execve, setuid, etc.
+NoNewPrivileges=true
+
+# Drop all Linux capabilities. OpenClaw does not need any.
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+# --- Device Access ---
+
+# Deny access to physical devices
+PrivateDevices=true
+
+# --- Namespace Isolation ---
+
+# Restrict which namespace types the process can create
+RestrictNamespaces=true
+
+# Protect kernel tunables, modules, and control groups
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+
+# Protect the system clock
+ProtectClock=true
+
+# Protect hostname changes
+ProtectHostname=true
+
+# --- System Call Filtering ---
+
+# Restrict available system calls to a safe subset
+SystemCallFilter=@system-service
+SystemCallFilter=~@mount @reboot @swap @clock @debug @module @raw-io @obsolete @cpu-emulation @privileged
+SystemCallArchitectures=native
+SystemCallErrorNumber=EPERM
+
+# --- Network ---
+
+# Restrict network address families to IPv4, IPv6, and Unix sockets
+# AF_NETLINK is included because Tailscale may need it for network state queries
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+
+# --- Miscellaneous ---
+
+# Prevent memory from being swapped to disk (protects secrets in memory)
+MemoryDenyWriteExecute=true
+
+# Lock down personality (prevent switching to 32-bit mode)
+LockPersonality=true
+
+# Restrict realtime scheduling
+RestrictRealtime=true
+
+# Restrict SUID/SGID file creation
+RestrictSUIDSGID=true
+
+# Set umask
+UMask=0077
+
+# --- Logging ---
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=openclaw-gateway
+
+[Install]
+WantedBy=multi-user.target
+UNITEOF
+```
+
+> **Note:** The `ExecStart` path assumes `openclaw` is installed at `/usr/bin/openclaw`. If it was installed elsewhere (e.g., in the user's `~/.local/bin`), adjust the path accordingly. Find it with: `sudo -u openclaw bash -c 'which openclaw'`.
+
+### 7.2 Adjust the ExecStart Path
+
+Verify where OpenClaw is installed:
+
+```bash
+sudo -u openclaw bash -c 'export PATH="/home/openclaw/.local/bin:$PATH" && which openclaw'
+```
+
+If the binary is at a different location, update the unit file:
+
+```bash
+OPENCLAW_BIN=$(sudo -u openclaw bash -c 'export PATH="/home/openclaw/.local/bin:$PATH" && which openclaw')
+sudo sed -i "s|/usr/bin/openclaw|${OPENCLAW_BIN}|g" /etc/systemd/system/openclaw-gateway.service
+```
+
+### 7.3 Enable and Start the Service
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable openclaw-gateway.service
+sudo systemctl start openclaw-gateway.service
+```
+
+Verify the service started cleanly:
+
+```bash
+sudo systemctl status openclaw-gateway.service
+```
+
+Check the journal for startup logs:
+
+```bash
+sudo journalctl -u openclaw-gateway.service --no-pager -n 50
+```
+
+### 7.4 Verify Systemd Security Score
+
+systemd includes a built-in security analysis tool:
+
+```bash
+sudo systemd-analyze security openclaw-gateway.service
+```
+
+Aim for an exposure score of **2.0 or lower** (on a scale where 0 is fully locked down and 10 is completely exposed). The directives above should achieve this.
+
+---
+
+## Phase 8: Monitoring and Logging
+
+### 8.1 Centralized Logging with journald
+
+The systemd unit file directs all OpenClaw output to the journal. Configure journal persistence and size limits:
+
+```bash
+sudo mkdir -p /etc/systemd/journald.conf.d
+
+sudo tee /etc/systemd/journald.conf.d/openclaw.conf > /dev/null << 'JEOF'
+[Journal]
+# Persist logs across reboots
+Storage=persistent
+
+# Maximum disk space for journal files
+SystemMaxUse=1G
+
+# Maximum size of individual journal files
+SystemMaxFileSize=100M
+
+# Keep logs for 90 days
+MaxRetentionSec=90day
+
+# Compress logs
+Compress=yes
+
+# Forward to syslog if a syslog daemon is running
+ForwardToSyslog=yes
+JEOF
+
+sudo systemctl restart systemd-journald
+```
+
+Query OpenClaw-specific logs:
+
+```bash
+# Recent logs
+sudo journalctl -u openclaw-gateway.service --since "1 hour ago"
+
+# Follow live
+sudo journalctl -u openclaw-gateway.service -f
+
+# Errors only
+sudo journalctl -u openclaw-gateway.service -p err
+```
+
+### 8.2 OpenClaw Application Logs
+
+OpenClaw writes application-level logs to `/tmp/openclaw/`. Because the systemd unit uses `PrivateTmp=true`, these logs are isolated in a private temporary directory for the service.
+
+To access them:
+
+```bash
+# The actual path is under systemd's private tmp
+sudo ls /tmp/systemd-private-*-openclaw-gateway.service-*/tmp/openclaw/ 2>/dev/null
+
+# Or query from journald, which captures stdout/stderr
+sudo journalctl -u openclaw-gateway.service --output=cat
+```
+
+### 8.3 Log Rotation
+
+journald handles its own rotation via the retention settings in section 8.1. Traefik access logs are managed on the Traefik Docker host (not on this VM), so no additional logrotate configuration is needed on the OpenClaw VM.
+
+### 8.4 Monitoring with Prometheus Node Exporter (Optional)
+
+For infrastructure-level monitoring, install the Prometheus node exporter:
+
+```bash
+sudo apt install -y prometheus-node-exporter
+```
+
+The exporter runs on port 9100 by default. Do NOT expose this port to the internet.
+
+```bash
+# Bind node exporter to localhost only
+sudo mkdir -p /etc/default
+sudo tee /etc/default/prometheus-node-exporter > /dev/null << 'NODEEOF'
+ARGS="--web.listen-address=127.0.0.1:9100"
+NODEEOF
+
+sudo systemctl enable prometheus-node-exporter
+sudo systemctl restart prometheus-node-exporter
+```
+
+> **Note:** You will need a Prometheus server (which can run on a separate host) to scrape these metrics. That is outside the scope of this guide. Connect via SSH tunnel or Tailnet for secure access to the metrics endpoint.
+
+### 8.5 Logwatch (Optional)
+
+Logwatch provides daily summary reports of system activity:
+
+```bash
+sudo apt install -y logwatch
+```
+
+Configure daily email reports:
+
+```bash
+sudo tee /etc/logwatch/conf/logwatch.conf > /dev/null << 'LWEOF'
+Output = mail
+MailTo = admin@example.com
+MailFrom = logwatch@claw.sunsetvista.co
+Detail = Med
+Range = yesterday
+Service = All
+LWEOF
+```
+
+---
+
+## Phase 9: Backup and Recovery
+
+### 9.1 Backup Strategy
+
+The critical data that must be backed up lives in the OpenClaw state directory:
+
+| Path | Contents | Sensitivity |
+|---|---|---|
+| `~/.openclaw/openclaw.json` | Main configuration including tokens | Critical |
+| `~/.openclaw/credentials/` | Provider API keys and WhatsApp creds | Critical |
+| `~/.openclaw/agents/*/agent/auth-profiles.json` | Agent authentication profiles | High |
+| `~/.openclaw/agents/*/sessions/*.jsonl` | Session transcripts | High |
+
+### 9.2 Encrypted Backup Script
+
+Create an automated backup script that produces GPG-encrypted archives:
+
+```bash
+sudo tee /usr/local/bin/openclaw-backup.sh > /dev/null << 'BKEOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Configuration
+BACKUP_DIR="/var/backups/openclaw"
+OPENCLAW_HOME="/home/openclaw/.openclaw"
+RETENTION_DAYS=30
+DATE=$(date +%Y%m%d-%H%M%S)
+BACKUP_FILE="${BACKUP_DIR}/openclaw-backup-${DATE}.tar.gz.gpg"
+
+# GPG recipient for encryption (set to your GPG key ID or email)
+GPG_RECIPIENT="admin@example.com"
+
+# Create backup directory
+mkdir -p "${BACKUP_DIR}"
+chmod 700 "${BACKUP_DIR}"
+
+# Create compressed tarball and encrypt with GPG
+tar czf - -C /home/openclaw .openclaw 2>/dev/null | \
+    gpg --encrypt --recipient "${GPG_RECIPIENT}" --trust-model always \
+    --output "${BACKUP_FILE}"
+
+chmod 600 "${BACKUP_FILE}"
+
+# Verify the backup is not empty
+if [ ! -s "${BACKUP_FILE}" ]; then
+    echo "ERROR: Backup file is empty" >&2
+    rm -f "${BACKUP_FILE}"
+    exit 1
+fi
+
+echo "Backup created: ${BACKUP_FILE} ($(du -h "${BACKUP_FILE}" | cut -f1))"
+
+# Remove backups older than retention period
+find "${BACKUP_DIR}" -name "openclaw-backup-*.tar.gz.gpg" -mtime +${RETENTION_DAYS} -delete
+
+echo "Cleanup complete. Remaining backups:"
+ls -lh "${BACKUP_DIR}"/openclaw-backup-*.tar.gz.gpg 2>/dev/null || echo "  (none)"
+BKEOF
+
+sudo chmod 700 /usr/local/bin/openclaw-backup.sh
+```
+
+> **Warning:** Replace `admin@example.com` in the `GPG_RECIPIENT` variable with the GPG key ID or email address of the key you want to use for encryption. You must have this GPG public key imported on the server. Without the corresponding private key, the backups cannot be decrypted.
+
+Import your GPG public key on the server:
+
+```bash
+sudo gpg --import /path/to/your-public-key.asc
+```
+
+### 9.3 Schedule Automated Backups
+
+```bash
+sudo tee /etc/cron.d/openclaw-backup > /dev/null << 'CRONEOF'
+# Run OpenClaw backup daily at 02:00 UTC
+0 2 * * * root /usr/local/bin/openclaw-backup.sh >> /var/log/openclaw-backup.log 2>&1
+CRONEOF
+
+sudo chmod 644 /etc/cron.d/openclaw-backup
+```
+
+### 9.4 Restore Procedure
+
+To restore from an encrypted backup:
+
+```bash
+# Decrypt the backup
+gpg --decrypt /var/backups/openclaw/openclaw-backup-YYYYMMDD-HHMMSS.tar.gz.gpg | \
+    tar xzf - -C /home/openclaw/
+
+# Fix ownership
+sudo chown -R openclaw:openclaw /home/openclaw/.openclaw
+
+# Fix permissions
+sudo chmod 700 /home/openclaw/.openclaw
+sudo chmod 600 /home/openclaw/.openclaw/openclaw.json
+sudo find /home/openclaw/.openclaw -name "creds.json" -exec chmod 600 {} \;
+sudo find /home/openclaw/.openclaw -name "auth-profiles.json" -exec chmod 600 {} \;
+sudo find /home/openclaw/.openclaw -name "*.jsonl" -exec chmod 600 {} \;
+
+# Restart the gateway
+sudo systemctl restart openclaw-gateway.service
+```
+
+### 9.5 Credential Rotation Schedule
+
+Establish a regular rotation schedule for all secrets:
+
+| Credential | Rotation Frequency | Procedure |
+|---|---|---|
+| Gateway auth token | Every 90 days | Regenerate with `openclaw doctor --generate-gateway-token`, update `openclaw.json`, restart gateway, update all clients |
+| Model provider API keys | Every 90 days | Rotate in provider dashboard, update OpenClaw config |
+| SSH keys (fallback) | Annually | Generate new keypair, add to server, remove old key |
+| Tailscale auth key | Every 90 days (if expiry set) or on compromise | Revoke in [admin console](https://login.tailscale.com/admin/settings/keys), generate new key, run `sudo tailscale up --ssh --authkey=tskey-auth-NEWKEY` |
+| Backup GPG keys | Every 2 years | Generate new key, re-encrypt recent backups, retire old key |
+
+### 9.6 Incident Response Checklist
+
+If you suspect a security incident, follow these steps in order. This procedure is derived from the official OpenClaw documentation.
+
+**1. Contain**
+
+```bash
+# Stop the gateway immediately
+sudo systemctl stop openclaw-gateway.service
+
+# Verify it is stopped
+sudo systemctl status openclaw-gateway.service
+```
+
+**2. Isolate**
+
+```bash
+# If the compromise may extend to the tailnet, disconnect entirely:
+# sudo tailscale down
+
+# Ensure binding is set to loopback (it should already be)
+# If you suspect the config was tampered with, force it:
+sudo -u openclaw bash -c "
+cd /home/openclaw/.openclaw
+cp openclaw.json openclaw.json.incident-backup
+"
+```
+
+Manually verify the bind setting:
+
+```bash
+sudo grep -i bind /home/openclaw/.openclaw/openclaw.json
+```
+
+**3. Disable DMs**
+
+Edit the config to set DM policy to disabled:
+
+```bash
+# Temporarily disable all DM access
+# Edit openclaw.json and set: session.dmPolicy: "disabled"
+```
+
+**4. Rotate All Credentials**
+
+```bash
+# Generate a new gateway token
+sudo -u openclaw bash -c 'source /home/openclaw/.openclaw/env && openclaw doctor --generate-gateway-token'
+
+# Update openclaw.json with the new token
+
+# Rotate model provider API keys in their respective dashboards
+# Update the keys in OpenClaw configuration
+```
+
+**5. Review Logs**
+
+```bash
+# Check OpenClaw application logs
+sudo journalctl -u openclaw-gateway.service --since "24 hours ago" --no-pager
+
+# Check for log files (path depends on PrivateTmp)
+sudo find /tmp -path "*/openclaw/*.log" -exec ls -la {} \; 2>/dev/null
+
+# Review session transcripts for signs of abuse
+sudo find /home/openclaw/.openclaw -name "*.jsonl" -newer /home/openclaw/.openclaw/openclaw.json -exec ls -la {} \;
+```
+
+**6. Review Audit Logs**
+
+```bash
+# Check auditd logs for the openclaw user
+sudo ausearch -k openclaw_home --start recent
+sudo ausearch -k openclaw_exec --start recent
+```
+
+**7. Restore and Restart**
+
+After investigation is complete and credentials are rotated:
+
+```bash
+sudo systemctl start openclaw-gateway.service
+sudo -u openclaw bash -c 'source /home/openclaw/.openclaw/env && openclaw security audit --deep'
+```
+
+---
+
+## Phase 10: Ongoing Maintenance
+
+### 10.1 Regular Security Audit Schedule
+
+| Audit Task | Frequency | Command / Procedure |
+|---|---|---|
+| OpenClaw security audit | Weekly | `openclaw security audit` |
+| Deep gateway probe | Monthly | `openclaw security audit --deep` |
+| Auto-fix check | Monthly | `openclaw security audit --fix` |
+| OS package updates | Daily (automated) | Verified via `unattended-upgrades` |
+| Manual OS audit | Monthly | `sudo apt update && sudo apt list --upgradable` |
+| Firewall rule review | Monthly | `sudo ufw status verbose` |
+| Systemd security score | Quarterly | `sudo systemd-analyze security openclaw-gateway.service` |
+| Tailscale status check | Weekly | `tailscale status` |
+| Tailscale ACL review | Quarterly | Review ACLs in [admin console](https://login.tailscale.com/admin/acls) |
+| TLS certificate check | Monthly | `curl -vI https://claw.sunsetvista.co 2>&1 \| grep expire` |
+| Fail2Ban review | Weekly | `sudo fail2ban-client status sshd` |
+| Audit log review | Weekly | `sudo ausearch -k openclaw_home --start this-week` |
+
+### 10.2 Update Procedures
+
+#### Updating OpenClaw
+
+```bash
+# Stop the service
+sudo systemctl stop openclaw-gateway.service
+
+# Back up the current installation
+sudo /usr/local/bin/openclaw-backup.sh
+
+# Download and inspect the new install script
+sudo -u openclaw bash -c 'curl -fsSL https://openclaw.ai/install.sh -o /tmp/openclaw-update.sh'
+less /tmp/openclaw-update.sh
+
+# Run the update
+sudo -u openclaw bash -c 'source /home/openclaw/.openclaw/env && bash /tmp/openclaw-update.sh'
+
+# Remove the install script
+rm /tmp/openclaw-update.sh
+
+# Run security audit after update
+sudo -u openclaw bash -c 'source /home/openclaw/.openclaw/env && openclaw security audit --deep'
+
+# Restart the service
+sudo systemctl start openclaw-gateway.service
+
+# Verify
+sudo systemctl status openclaw-gateway.service
+```
+
+#### Updating Node.js
+
+```bash
+sudo apt update
+sudo apt install --only-upgrade nodejs
+node --version
+sudo systemctl restart openclaw-gateway.service
+```
+
+#### Updating Traefik
+
+Traefik runs on your separate Docker host, not on the OpenClaw VM. Update it there:
+
+```bash
+# On the Traefik Docker host
+docker pull traefik:latest
+docker compose up -d traefik
+```
+
+### 10.3 Credential Rotation Procedure
+
+Rotating the gateway token with zero downtime:
+
+```bash
+# Generate new token
+NEW_TOKEN=$(openssl rand -hex 32)
+echo "New token: ${NEW_TOKEN}"
+
+# Update all clients FIRST with the new token
+# (This depends on your client setup — update environment variables,
+# config files, or secret managers as appropriate.)
+
+# Then update the server config
+sudo -u openclaw bash -c "
+source /home/openclaw/.openclaw/env
+# Use sed or a JSON tool to update the token in openclaw.json
+"
+
+# Restart the gateway to apply
+sudo systemctl restart openclaw-gateway.service
+
+# Verify the gateway accepts the new token
+curl -s -o /dev/null -w "%{http_code}" \
+  -H "Authorization: Bearer ${NEW_TOKEN}" \
+  http://127.0.0.1:18789/
+# Expected: 200 (or the appropriate authenticated response code)
+```
+
+### 10.4 Monitoring Review
+
+Check the health of the entire stack regularly:
+
+```bash
+# Gateway health
+sudo systemctl is-active openclaw-gateway.service
+
+# Traefik health (run on the Traefik Docker host)
+# docker ps --filter name=traefik --format '{{.Status}}'
+
+# Disk usage (the state directory can grow with session transcripts)
+sudo du -sh /home/openclaw/.openclaw/
+
+# Memory usage
+systemctl show openclaw-gateway.service --property=MemoryCurrent
+
+# Tailscale health
+tailscale status
+
+# Open ports (should only show 80, 443 — SSH is on Tailscale only)
+sudo ss -tlnp
+```
+
+---
+
+## Appendix A: Complete Hardened openclaw.json Reference
+
+This is an annotated reference of a production-hardened config. It is based on the actual config schema generated by the OpenClaw onboarding wizard, with security-relevant settings explained.
+
+> **Important:** Do NOT blindly copy-paste this file — it will overwrite your API keys, Brave Search key, and other wizard-generated settings. Use this as a reference to verify and harden your existing config. See [Section 5.3](#53-harden-the-existing-configuration) for the step-by-step process.
+
+```json
+{
+  // --- METADATA (wizard-generated, do not modify) ---
+  "meta": {
+    "lastTouchedVersion": "2026.2.17",
+    "lastTouchedAt": "2026-02-18T20:59:13.316Z"
+  },
+  "wizard": {
+    "lastRunAt": "2026-02-18T20:59:13.305Z",
+    "lastRunVersion": "2026.2.17",
+    "lastRunCommand": "configure",
+    "lastRunMode": "local"
+  },
+
+  // --- API KEY PROFILES ---
+  // Root-level "auth" is for API provider credentials ONLY.
+  // DO NOT put gateway auth (mode/token) here — that goes under gateway.auth.
+  "auth": {
+    "profiles": {
+      "anthropic:default": {
+        "provider": "anthropic",
+        "mode": "api_key"
+      }
+    }
+  },
+
+  // --- AGENT DEFAULTS ---
+  "agents": {
+    "defaults": {
+      "workspace": "/home/openclaw/.openclaw/workspace",
+      "compaction": {
+        "mode": "safeguard"
+      },
+      "maxConcurrent": 4,
+      "subagents": {
+        "maxConcurrent": 8
+      }
+    }
+  },
+
+  // --- TOOLS ---
+  "tools": {
+    "web": {
+      "search": {
+        "enabled": true,
+        "apiKey": "<BRAVE_SEARCH_API_KEY>"
+      },
+      "fetch": {
+        "enabled": true
+      }
+    }
+  },
+
+  // --- MESSAGING ---
+  "messages": {
+    "ackReactionScope": "group-mentions"
+  },
+
+  // --- COMMANDS ---
+  "commands": {
+    "native": "auto",
+    "nativeSkills": "auto"
+  },
+
+  // --- HOOKS ---
+  "hooks": {
+    "internal": {
+      "enabled": true,
+      "entries": {
+        "command-logger": { "enabled": true },
+        "session-memory": { "enabled": true }
+      }
+    }
+  },
+
+  // --- GATEWAY (security-critical section) ---
+  "gateway": {
+    // PORT: Firewalled via UFW to only accept connections from Traefik host.
+    "port": 18789,
+
+    // MODE: "local" for self-hosted single-node deployment.
+    "mode": "local",
+
+    // BIND: "lan" is REQUIRED because Traefik is on a separate host.
+    // Use "loopback" only if the reverse proxy is on the same machine.
+    // WARNING: bind=lan exposes the gateway to your entire LAN segment.
+    // This is safe ONLY because token auth + UFW source-restrict are enforced.
+    "bind": "lan",
+
+    // AUTHENTICATION: MANDATORY when bind=lan.
+    // Generate token with: openclaw doctor --generate-gateway-token
+    // Or manually: openssl rand -hex 32
+    "auth": {
+      "mode": "token",
+      "token": "<GENERATED_TOKEN>",
+      "rateLimit": {
+        "maxAttempts": 10,
+        "windowMs": 60000,
+        "lockoutMs": 300000
+      }
+    },
+
+    // TAILSCALE: Must be "off" when bind=lan.
+    // OpenClaw enforces bind=loopback when tailscale.mode is "serve" or "funnel".
+    // Since Traefik is on a separate host, we need bind=lan, so Tailscale
+    // Serve/Funnel cannot be used. See Section 2.4.4.
+    "tailscale": {
+      "mode": "off",
+      "resetOnExit": false
+    },
+
+    // DENY COMMANDS: Block canvas/UI commands that a headless server
+    // should never expose. Uses exact command-name matching only —
+    // invalid names are silently ignored.
+    "nodes": {
+      "denyCommands": [
+        "canvas.present",
+        "canvas.hide",
+        "canvas.navigate",
+        "canvas.eval",
+        "canvas.snapshot",
+        "canvas.a2ui.push",
+        "canvas.a2ui.pushJSONL",
+        "canvas.a2ui.reset"
+      ]
+    }
+  },
+
+  // --- SKILLS ---
+  "skills": {
+    "install": {
+      "nodeManager": "npm"
+    }
+  }
+}
+```
+
+### Security Settings to Explore via `openclaw security audit --deep`
+
+The deep security audit may recommend additional settings not shown above. These are config keys that OpenClaw supports but the wizard doesn't set by default. Review the audit output and add any that apply to your deployment. Common recommendations include:
+
+| Setting | Purpose |
+|---|---|
+| `gateway.controlUi.allowInsecureAuth` | Require HTTPS for the control UI (default: false = safe) |
+| `gateway.controlUi.dangerouslyDisableDeviceAuth` | Device auth for dashboard access (default: false = safe) |
+| `agents.defaults.sandbox.mode` | Agent sandboxing level ("all" is most restrictive) |
+| `agents.defaults.sandbox.scope` | Per-agent isolation vs shared sandbox |
+| Tool allow/deny lists | Restrict which tools agents can invoke |
+| Logging redaction | Control sensitive data redaction in logs |
+
+Run `openclaw security audit --deep` to see which of these are relevant to your version and configuration.
+
+---
+
+## Appendix B: Security Checklist
+
+Use this checklist to verify every hardening step has been completed. Review it after initial setup and during each quarterly security audit.
+
+### ESXi Bootstrap
+
+- [ ] VM created in ESXi with VMXNET3 adapter and correct resource allocation
+- [ ] Ubuntu 24.04 LTS Server (minimized) installed with OpenSSH server enabled
+- [ ] Static IP configured (or DHCP address noted)
+- [ ] SSH login verified from laptop/desktop
+- [ ] Internet connectivity confirmed from the VM
+- [ ] `open-vm-tools` installed (not desktop variant)
+- [ ] ESXi web console no longer needed — all work done via SSH
+
+### OS Hardening
+
+- [ ] Ubuntu 24.04 LTS is installed and fully updated
+- [ ] Dedicated `openclaw` service user created with `nologin` shell
+- [ ] User account password is locked (`passwd -l openclaw`)
+- [ ] SSH uses a non-standard port
+- [ ] SSH root login is disabled (`PermitRootLogin no`)
+- [ ] SSH password authentication is disabled (`PasswordAuthentication no`)
+- [ ] SSH uses strong key exchange, ciphers, and MACs
+- [ ] SSH `AllowUsers` restricts access to named admin accounts
+- [ ] Fail2Ban is active and monitoring SSH
+- [ ] UFW firewall is enabled with default deny incoming
+- [ ] UFW allows only: custom SSH port, 80/tcp, 443/tcp
+- [ ] Port 18789 is NOT open in the firewall
+- [ ] Unattended-upgrades is configured for security updates
+- [ ] Unnecessary services are disabled (Avahi, CUPS, Bluetooth, etc.)
+- [ ] auditd is installed and monitoring OpenClaw paths
+- [ ] Kernel hardening sysctl parameters are applied
+- [ ] IP forwarding is disabled
+- [ ] SYN cookies are enabled
+- [ ] ICMP redirects are ignored
+- [ ] AppArmor is active and enforcing
+- [ ] Full-disk encryption is in use (LUKS or provider-level)
+
+### SSH Key Deployment
+
+- [ ] SSH public keys deployed from all admin laptops/desktops
+- [ ] Each key has an identifying comment (machine name + date)
+- [ ] Key-based login tested from every machine before SSHD restart
+- [ ] All keys use Ed25519 (preferred) or RSA 4096-bit minimum
+- [ ] All private keys are passphrase-protected
+
+### Tailscale Zero-Trust Networking
+
+- [ ] Tailscale is installed and authenticated on the server
+- [ ] Pre-authenticated auth key generated (reusable, stored securely)
+- [ ] Server joined with `tailscale up --ssh --authkey=tskey-auth-XXXXX`
+- [ ] `tailscaled` service enabled on boot (`systemctl enable tailscaled`)
+- [ ] Tailscale is installed on all admin laptops and desktops
+- [ ] All devices are on the same tailnet
+- [ ] Tailscale SSH is enabled
+- [ ] Tailscale ACLs restrict SSH to specific users and tagged devices
+- [ ] Tailscale SSH `action` is set to `"check"` (re-auth every 12h)
+- [ ] Traditional SSH is bound to Tailscale IP only (not public interface)
+- [ ] Public SSH port removed from UFW firewall rules
+- [ ] Tailscale Serve is **disabled** (incompatible with `bind=lan` for cross-host Traefik)
+- [ ] UFW allows traffic on `tailscale0` interface
+- [ ] Key expiry is enabled in Tailscale admin console
+- [ ] New device auto-approval is disabled
+- [ ] Tailscale Lock is enabled (optional but recommended)
+- [ ] `gateway.allowTailscale` is set to `false` in OpenClaw config (Tailscale Serve not used)
+- [ ] `gateway.trustedProxies` includes `100.64.0.0/10` for Tailscale
+
+### Runtime Environment
+
+- [ ] Node.js 22+ installed from NodeSource repository
+- [ ] Node.js package integrity verified via GPG
+- [ ] OpenClaw state directory exists with correct ownership
+- [ ] `~/.openclaw/` has permissions `700`
+- [ ] Environment file created at `~/.openclaw/env` with permissions `600`
+- [ ] `OPENCLAW_DISABLE_BONJOUR=1` is set
+
+### OpenClaw Installation
+
+- [ ] Install script was downloaded and inspected before execution
+- [ ] Installation ran as the `openclaw` user (not root)
+- [ ] Onboarding wizard completed
+- [ ] Gateway status verified
+
+### OpenClaw Hardening
+
+- [ ] Gateway token generated and configured
+- [ ] `gateway.auth.mode` is set to `"token"`
+- [ ] `gateway.bind` is set to `"lan"` (required — Traefik is on a separate host)
+- [ ] `gateway.controlUi.allowInsecureAuth` is `false`
+- [ ] `gateway.controlUi.dangerouslyDisableDeviceAuth` is `false`
+- [ ] `gateway.trustedProxies` includes Traefik host LAN IP and `100.64.0.0/10`
+- [ ] `discovery.mdns.mode` is set to `"off"`
+- [ ] `session.dmPolicy` is set to `"pairing"` or `"allowlist"`
+- [ ] `session.dmScope` is set to `"per-channel-peer"`
+- [ ] `agents.defaults.sandbox.mode` is set to `"all"`
+- [ ] `agents.defaults.sandbox.scope` is set to `"agent"`
+- [ ] `agents.defaults.sandbox.workspaceAccess` is set to `"none"`
+- [ ] `gateway.auth.rateLimit` is configured (maxAttempts: 10, windowMs: 60000, lockoutMs: 300000)
+- [ ] `gateway.nodes.denyCommands` uses valid command names (canvas.*, not camera.*/calendar.*)
+- [ ] `openclaw.json` has permissions `600`
+- [ ] `~/.openclaw/credentials` directory has permissions `700` (not 775)
+- [ ] All `creds.json` files have permissions `600`
+- [ ] All `auth-profiles.json` files have permissions `600`
+- [ ] All `*.jsonl` session files have permissions `600`
+- [ ] `openclaw security audit` passes with no critical findings
+- [ ] `openclaw security audit --deep` passes
+- [ ] `openclaw security audit --fix` has been run
+
+### Reverse Proxy (Traefik)
+
+- [ ] `claw.sunsetvista.co` DNS record created in Cloudflare
+- [ ] Traefik router `claw-secure` added to `config.yml`
+- [ ] Traefik service `claw-service` points to `http://10.0.0.91:18789`
+- [ ] `certResolver: cloudflare` set on the TLS block
+- [ ] `default-headers` middleware applied (HSTS, XSS filter, nosniff, frame deny)
+- [ ] `https-redirectscheme` middleware applied (HTTP → HTTPS)
+- [ ] Traefik reloaded and route verified
+- [ ] OpenClaw gateway `bind` set to `"lan"` (required for cross-host proxy)
+- [ ] UFW restricts port 18789 to Traefik host IP only
+- [ ] `trustedProxies` includes the Traefik host LAN IP
+- [ ] `curl -I https://claw.sunsetvista.co/` returns security headers
+
+### Systemd Service
+
+- [ ] Systemd unit file is created at `/etc/systemd/system/openclaw-gateway.service`
+- [ ] Service runs as the `openclaw` user (not root)
+- [ ] `ProtectSystem=strict` is set
+- [ ] `ProtectHome=tmpfs` is set
+- [ ] `ReadWritePaths` is limited to `~/.openclaw` and `/tmp/openclaw`
+- [ ] `PrivateTmp=true` is set
+- [ ] `NoNewPrivileges=true` is set
+- [ ] `CapabilityBoundingSet` is empty (all capabilities dropped)
+- [ ] `PrivateDevices=true` is set
+- [ ] `RestrictNamespaces=true` is set
+- [ ] `ProtectKernelTunables=true` is set
+- [ ] `ProtectKernelModules=true` is set
+- [ ] `ProtectKernelLogs=true` is set
+- [ ] `SystemCallFilter` restricts to `@system-service`
+- [ ] `MemoryDenyWriteExecute=true` is set
+- [ ] `RestrictAddressFamilies` is limited to `AF_INET AF_INET6 AF_UNIX AF_NETLINK`
+- [ ] `UMask=0077` is set
+- [ ] `systemd-analyze security` score is 2.0 or lower
+- [ ] Service is enabled and starts on boot
+
+### Monitoring and Logging
+
+- [ ] journald is configured for persistent storage
+- [ ] Journal retention is set (90 days recommended)
+- [ ] Traefik access logs managed on the Traefik Docker host
+- [ ] Prometheus node exporter is bound to localhost only (if installed)
+- [ ] Logwatch is sending daily reports (if configured)
+
+### Backup and Recovery
+
+- [ ] Encrypted backup script is in place
+- [ ] GPG key for backup encryption is imported
+- [ ] Automated daily backup cron job is active
+- [ ] Backup retention policy is set (30 days)
+- [ ] Restore procedure has been tested
+- [ ] Credential rotation schedule is documented
+- [ ] Incident response checklist is accessible to all operators
+
+### Ongoing Maintenance
+
+- [ ] Weekly `openclaw security audit` is scheduled
+- [ ] Monthly deep audit with `--deep` flag
+- [ ] Quarterly systemd security score review
+- [ ] 90-day credential rotation is enforced
+- [ ] Update procedures are documented and tested
+- [ ] Tailscale ACLs reviewed quarterly
+- [ ] Tailscale node list audited (no unknown devices)
+- [ ] Tailscale Serve confirmed disabled (`sudo tailscale serve status` shows nothing)
+- [ ] Monitoring dashboards are reviewed weekly
+
+---
+
+**End of Guide**
