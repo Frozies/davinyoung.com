@@ -1,8 +1,10 @@
+import ScrollReveal from "./ScrollReveal";
+
 export default function Contact() {
   return (
     <section id="contact" className="py-24 sm:py-32 border-t border-border" aria-labelledby="contact-heading">
       <div className="mx-auto max-w-6xl px-6">
-        <div className="animate-fade-up max-w-xl">
+        <ScrollReveal className="max-w-xl">
           <h2 id="contact-heading" className="text-3xl sm:text-4xl font-bold text-white">Get in Touch</h2>
           <p className="mt-4 text-muted leading-relaxed">
             Open to consulting, collaboration, and interesting conversations about
@@ -42,7 +44,7 @@ export default function Contact() {
               View GitHub
             </a>
           </div>
-        </div>
+        </ScrollReveal>
       </div>
     </section>
   );

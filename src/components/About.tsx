@@ -28,17 +28,19 @@ const links = [
   { label: "Sunset Vista Co.", href: "https://sunsetvista.co" },
 ];
 
+import ScrollReveal from "./ScrollReveal";
+
 export default function About() {
   return (
     <section id="about" className="py-24 sm:py-32 border-t border-border" aria-labelledby="about-heading">
       <div className="mx-auto max-w-6xl px-6">
-        <div className="animate-fade-up">
+        <ScrollReveal>
           <h2 id="about-heading" className="text-3xl sm:text-4xl font-bold text-white">About</h2>
-        </div>
+        </ScrollReveal>
 
         <div className="mt-12 grid gap-12 lg:grid-cols-[1fr,1.2fr]">
           {/* Bio */}
-          <div className="animate-fade-up animation-delay-100 space-y-5 text-muted leading-relaxed">
+          <ScrollReveal delay={100} className="space-y-5 text-muted leading-relaxed">
             <p>
               I&apos;m Davin Young — a Staff Software Engineer and founder based in
               Southwest Florida. I like building things end-to-end: backend services,
@@ -93,10 +95,10 @@ export default function About() {
                 </a>
               ))}
             </nav>
-          </div>
+          </ScrollReveal>
 
           {/* Skills */}
-          <div className="animate-fade-up animation-delay-200 space-y-6">
+          <ScrollReveal delay={200} className="space-y-6">
             <h3 className="text-lg font-semibold text-white">Tech Stack</h3>
             {skillGroups.map((group) => (
               <div key={group.category}>
@@ -115,7 +117,7 @@ export default function About() {
                 </div>
               </div>
             ))}
-          </div>
+          </ScrollReveal>
         </div>
       </div>
     </section>

@@ -1,4 +1,5 @@
 import ProjectCard from "./ProjectCard";
+import ScrollReveal from "./ScrollReveal";
 
 const projects = [
   {
@@ -58,16 +59,18 @@ export default function Projects() {
   return (
     <section id="projects" className="py-24 sm:py-32" aria-labelledby="projects-heading">
       <div className="mx-auto max-w-6xl px-6">
-        <div className="animate-fade-up">
+        <ScrollReveal>
           <h2 id="projects-heading" className="text-3xl sm:text-4xl font-bold text-white">Projects</h2>
           <p className="mt-4 text-muted max-w-xl">
             Products, platforms, and infrastructure I&apos;ve built from the ground up.
           </p>
-        </div>
+        </ScrollReveal>
 
         <div className="mt-12 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {projects.map((project) => (
-            <ProjectCard key={project.name} {...project} />
+          {projects.map((project, i) => (
+            <ScrollReveal key={project.name} delay={i * 100}>
+              <ProjectCard {...project} />
+            </ScrollReveal>
           ))}
         </div>
       </div>
