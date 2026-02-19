@@ -16,27 +16,27 @@ export default function Hero() {
         <div className="animate-fade-up">
           <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight text-white leading-tight">
             I build things that{" "}
-            <span className="text-amber">verify trust.</span>
+            <span className="text-amber">ship.</span>
           </h1>
         </div>
 
         <div className="animate-fade-up animation-delay-100">
           <p className="mt-6 font-mono text-sm sm:text-base text-muted">
-            Staff Software Engineer · CTO & Founder at SecureTap · Patent Holder
+            Staff Software Engineer · Founder · Patent Holder
           </p>
         </div>
 
         <div className="animate-fade-up animation-delay-200">
           <p className="mt-6 text-base sm:text-lg text-muted max-w-2xl mx-auto leading-relaxed">
-            Full-stack engineer specializing in blockchain authentication, enterprise platforms,
-            and scalable systems. Two granted patents. 69+ enterprise demos including Nike,
-            Adidas, Louis Vuitton, Amazon, and Pfizer.
+            Full-stack engineer who builds across the entire stack — enterprise platforms,
+            e-commerce, infrastructure, and everything in between.
+            Two granted US patents. Multiple startups. From Hyperledger networks to Shopify storefronts.
           </p>
         </div>
 
         <div className="animate-fade-up animation-delay-300 mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
           <Link
-            href="#projects"
+            href="/#projects"
             className="inline-flex items-center gap-2 px-6 py-3 bg-amber text-background font-semibold text-sm rounded-lg hover:bg-amber-light transition-colors"
           >
             View Projects

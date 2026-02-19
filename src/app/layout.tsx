@@ -21,17 +21,16 @@ export const metadata: Metadata = {
     template: "%s | Davin Young",
   },
   description:
-    "Staff Software Engineer, CTO & Co-Founder of SecureTap, and patent holder. Full-stack engineer specializing in blockchain authentication, enterprise platforms, and scalable systems.",
+    "Staff Software Engineer, founder, and patent holder. Full-stack engineer building enterprise platforms, cloud infrastructure, e-commerce, and scalable systems.",
   keywords: [
     "Davin Young",
     "Staff Software Engineer",
-    "SecureTap",
-    "CTO",
-    "blockchain authentication",
-    "NFC",
-    "Hyperledger Fabric",
     "full-stack engineer",
     "patent holder",
+    "cloud infrastructure",
+    "enterprise platforms",
+    "e-commerce",
+    "startup founder",
   ],
   authors: [{ name: "Davin Young" }],
   creator: "Davin Young",
@@ -42,13 +41,13 @@ export const metadata: Metadata = {
     siteName: "Davin Young",
     title: "Davin Young — Staff Software Engineer, CTO & Founder",
     description:
-      "Full-stack engineer specializing in blockchain authentication, enterprise platforms, and scalable systems. Two granted patents. 69+ enterprise demos.",
+      "Full-stack engineer building enterprise platforms, cloud infrastructure, and scalable systems. Two granted US patents.",
   },
   twitter: {
     card: "summary_large_image",
     title: "Davin Young — Staff Software Engineer, CTO & Founder",
     description:
-      "Full-stack engineer specializing in blockchain authentication, enterprise platforms, and scalable systems.",
+      "Full-stack engineer building enterprise platforms, cloud infrastructure, and scalable systems.",
   },
   robots: {
     index: true,
@@ -68,17 +67,13 @@ const jsonLd = {
     "https://securetap.io",
     "https://sunsetvista.co",
   ],
-  worksFor: {
-    "@type": "Organization",
-    name: "SecureTap",
-    url: "https://securetap.io",
-  },
   knowsAbout: [
-    "Blockchain Authentication",
-    "NFC Technology",
-    "Hyperledger Fabric",
     "Software Engineering",
     "Cloud Infrastructure",
+    "Enterprise Platforms",
+    "E-Commerce",
+    "Blockchain",
+    "NFC Technology",
   ],
 };
 

@@ -9,7 +9,6 @@ const projects = [
     techStack: [
       "Java",
       "Spring Boot",
-      "Kotlin",
       "Hyperledger Fabric",
       "AWS",
       "PostgreSQL",

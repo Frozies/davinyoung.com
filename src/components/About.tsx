@@ -1,7 +1,7 @@
 const skillGroups = [
   {
     category: "Languages",
-    skills: ["Java", "Kotlin", "TypeScript", "JavaScript", "Python", "Rust", "SQL"],
+    skills: ["Java", "TypeScript", "JavaScript", "Python", "Rust", "SQL"],
   },
   {
     category: "Backend",
@@ -16,7 +16,7 @@ const skillGroups = [
     skills: ["AWS (multi-account)", "Docker", "Traefik", "Tailscale", "GitHub Actions", "LocalStack"],
   },
   {
-    category: "Other",
+    category: "Expert",
     skills: ["NFC/NDEF", "Blockchain (Hyperledger Fabric)", "Patent Development"],
   },
 ];
@@ -40,12 +40,12 @@ export default function About() {
           {/* Bio */}
           <div className="animate-fade-up animation-delay-100 space-y-5 text-muted leading-relaxed">
             <p>
-              I&apos;m Davin Young — a Staff Software Engineer, CTO, and founder based in
-              Southwest Florida. I build systems that verify trust, from blockchain
-              authentication platforms to Shopify stores for local businesses.
+              I&apos;m Davin Young — a Staff Software Engineer and founder based in
+              Southwest Florida. I like building things end-to-end: backend services,
+              cloud infrastructure, storefronts, and the glue in between.
             </p>
             <p>
-              As CTO and co-founder of{" "}
+              I&apos;ve co-founded{" "}
               <a
                 href="https://securetap.io"
                 target="_blank"
@@ -54,9 +54,7 @@ export default function About() {
               >
                 SecureTap
               </a>
-              , I architected a patented NFC + blockchain platform that&apos;s been demoed
-              to 69+ companies including Nike, Adidas, Louis Vuitton, Amazon, and Pfizer. I
-              also run{" "}
+              {" "}(a blockchain authentication startup) and{" "}
               <a
                 href="https://sunsetvista.co"
                 target="_blank"
@@ -65,16 +63,17 @@ export default function About() {
               >
                 Sunset Vista Co.
               </a>
-              , a digital marketing agency serving SWFL businesses.
+              {" "}(a digital agency serving SWFL businesses). Along the way I&apos;ve
+              picked up two granted US patents.
             </p>
             <p>
-              I&apos;m most at home deep in infrastructure — wiring up Hyperledger Fabric
-              networks, debugging Docker containers at 2am, or setting up CI/CD pipelines. I
-              hold two granted patents in authentication technology.
+              I&apos;m most at home deep in infrastructure — debugging Docker containers at
+              2am, setting up CI/CD pipelines, or standing up new services on AWS. I care
+              about systems that are reliable, well-tested, and simple enough to hand off.
             </p>
             <p>
-              When I&apos;m not coding, you&apos;ll find me tweaking my home lab, playing
-              World of Tanks, or working on electronics projects.
+              When I&apos;m not coding, you&apos;ll find me tweaking my home lab or
+              working on electronics projects.
             </p>
 
             {/* Links */}
