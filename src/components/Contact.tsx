@@ -13,7 +13,7 @@ export default function Contact() {
 
           <div className="mt-8 flex flex-col sm:flex-row gap-4">
             <a
-              href="mailto:davin@davinyoung.com"
+              href="mailto:davin@sunsetvista.co"
               className="inline-flex items-center gap-2 px-6 py-3 bg-amber text-background font-semibold text-sm rounded-lg hover:bg-amber-light transition-colors"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
