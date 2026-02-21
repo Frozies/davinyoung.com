@@ -1,7 +1,7 @@
 ---
 title: "Production-Grade OpenClaw Installation: A Security-First Guide for Ubuntu 24.04"
 date: "2026-02-17"
-excerpt: "A comprehensive, security-hardened guide to deploying OpenClaw on Ubuntu 24.04 LTS — covering OS hardening, Tailscale zero-trust networking, Traefik reverse proxy, systemd confinement, and monitoring."
+excerpt: "A comprehensive, security-hardened guide to deploying OpenClaw on Ubuntu 24.04 LTS, covering OS hardening, Tailscale zero-trust networking, Traefik reverse proxy, systemd confinement, and monitoring."
 tags:
   - DevOps
   - Home Lab
@@ -33,13 +33,13 @@ The installation follows 10 phases: bootstrap the VM in ESXi, harden the OS, set
 
 1. [Overview and Threat Model](#overview-and-threat-model)
 2. [Prerequisites](#prerequisites)
-3. [Phase 0: ESXi Bootstrap — Get to a Real Terminal](#phase-0-esxi-bootstrap--get-to-a-real-terminal)
+3. [Phase 0: ESXi Bootstrap: Get to a Real Terminal](#phase-0-esxi-bootstrap--get-to-a-real-terminal)
 4. [Phase 1: OS Hardening](#phase-1-os-hardening)
 5. [Phase 2: Tailscale Zero-Trust Networking](#phase-2-tailscale-zero-trust-networking)
 6. [Phase 3: Runtime Environment](#phase-3-runtime-environment)
 7. [Phase 4: OpenClaw Installation](#phase-4-openclaw-installation)
 8. [Phase 5: Security Hardening of OpenClaw](#phase-5-security-hardening-of-openclaw)
-9. [Phase 6: Reverse Proxy — Traefik](#phase-6-reverse-proxy--traefik-existing-infrastructure)
+9. [Phase 6: Reverse Proxy: Traefik](#phase-6-reverse-proxy--traefik-existing-infrastructure)
 10. [Phase 7: Systemd Service Hardening](#phase-7-systemd-service-hardening)
 11. [Phase 8: Monitoring and Logging](#phase-8-monitoring-and-logging)
 12. [Phase 9: Backup and Recovery](#phase-9-backup-and-recovery)
@@ -102,8 +102,8 @@ This guide assumes you are deploying a **fresh VM on VMware ESXi**. You will sta
 - A fresh installation of **Ubuntu 24.04 LTS Server** (minimal install preferred).
 - Root or sudo access for initial setup.
 - An existing **Traefik reverse proxy** on your network with Cloudflare DNS challenge for TLS (your existing Traefik Docker setup).
-- A Tailscale account ([login.tailscale.com](https://login.tailscale.com)) — free for personal use with up to 100 devices.
-- SSH key pairs on your laptop and desktop(s) — we'll generate them if you don't have them yet.
+- A Tailscale account ([login.tailscale.com](https://login.tailscale.com)), which is free for personal use with up to 100 devices.
+- SSH key pairs on your laptop and desktop(s). We'll generate them if you don't have them yet.
 
 > **Note:** This guide assumes a fresh VM. If you are working on an existing system, audit the current state carefully before applying these changes. Existing services, firewall rules, or user accounts may conflict.
 
@@ -117,9 +117,9 @@ This guide assumes you are deploying a **fresh VM on VMware ESXi**. You will sta
 
 ---
 
-## Phase 0: ESXi Bootstrap — Get to a Real Terminal
+## Phase 0: ESXi Bootstrap: Get to a Real Terminal
 
-The ESXi web console is painful to work in — no copy/paste, no scroll, no resize. The goal of Phase 0 is to get SSH running on the VM as fast as possible so you can switch to a real terminal on your laptop or desktop for everything that follows.
+The ESXi web console is painful to work in: no copy/paste, no scroll, no resize. The goal of Phase 0 is to get SSH running on the VM as fast as possible so you can switch to a real terminal on your laptop or desktop for everything that follows.
 
 ### 0.1 Create the VM in ESXi
 
@@ -144,17 +144,17 @@ Open the VM console from the ESXi web UI and walk through the Ubuntu installer:
 
 1. **Language:** English
 2. **Keyboard:** Your layout
-3. **Installation type:** **Ubuntu Server (minimized)** — this is the smallest footprint
-4. **Network:** Configure your interface. Use a **static IP** if possible — it makes everything easier:
+3. **Installation type:** **Ubuntu Server (minimized)**, which is the smallest footprint
+4. **Network:** Configure your interface. Use a **static IP** if possible, since it makes everything easier:
    - Note down the IP address, gateway, and DNS. You will need the IP in about 2 minutes.
-   - If DHCP, that's fine — just check the assigned IP with `ip addr` after install.
-5. **Storage:** Use entire disk. Select **Set up this disk as an LVM group** and optionally **Encrypt the LVM group with LUKS** (recommended — see Phase 1.9).
+   - If DHCP, that's fine. Just check the assigned IP with `ip addr` after install.
+5. **Storage:** Use entire disk. Select **Set up this disk as an LVM group** and optionally **Encrypt the LVM group with LUKS** (recommended; see Phase 1.9).
 6. **Profile:**
    - Your name: whatever you like
    - Server name: `openclaw-prod`
-   - Username: pick your admin username (e.g., `davin`) — this is the account you will SSH into
+   - Username: pick your admin username (e.g., `davin`). This is the account you will SSH into
    - Password: set a strong temporary password (you'll disable password auth shortly)
-7. **SSH:** **Check "Install OpenSSH server"** — this is the critical step. The installer will install and enable `sshd` for you.
+7. **SSH:** **Check "Install OpenSSH server"**. This is the critical step. The installer will install and enable `sshd` for you.
 8. **Featured snaps:** Skip all of them. We install everything manually.
 9. **Complete** the install and reboot.
 
@@ -184,7 +184,7 @@ ssh your-admin-username@192.168.1.50
 
 Accept the host key fingerprint when prompted, enter the password you set during install.
 
-> **Note:** Yes, we are using password auth for this first connection. Phase 1 will disable password auth and switch to key-only. This is the bootstrap — you need one password login to deploy your keys.
+> **Note:** Yes, we are using password auth for this first connection. Phase 1 will disable password auth and switch to key-only. This is the bootstrap, and you need one password login to deploy your keys.
 
 **You are now in a real terminal.** You can close the ESXi web console. Everything from here forward happens over SSH from your laptop/desktop.
 
@@ -208,7 +208,7 @@ df -h /
 
 If all four commands pass, you are ready for Phase 1.
 
-> **Note:** If `ping` fails, you have a network issue to resolve in ESXi first — check your VM's port group, vSwitch, and gateway settings. OpenClaw installation requires internet access for downloading packages.
+> **Note:** If `ping` fails, you have a network issue to resolve in ESXi first. Check your VM's port group, vSwitch, and gateway settings. OpenClaw installation requires internet access for downloading packages.
 
 ### 0.6 (Optional) Install VMware Tools / open-vm-tools
 
@@ -218,7 +218,7 @@ For better VM integration (graceful shutdown, time sync, host-guest communicatio
 sudo apt update && sudo apt install -y open-vm-tools
 ```
 
-> **Note:** Do NOT install `open-vm-tools-desktop` — this is a headless server, there is no GUI.
+> **Note:** Do NOT install `open-vm-tools-desktop`. This is a headless server, and there is no GUI.
 
 ---
 
@@ -298,7 +298,7 @@ AddressFamily inet
 # Disable root login entirely
 PermitRootLogin no
 
-# Disable password authentication — keys only
+# Disable password authentication - keys only
 PasswordAuthentication no
 KbdInteractiveAuthentication no
 ChallengeResponseAuthentication no
@@ -386,7 +386,7 @@ Copy the output. Then on the server, paste all public keys into the authorized_k
 sudo mkdir -p /home/your-admin-username/.ssh
 sudo chmod 700 /home/your-admin-username/.ssh
 
-# Add your keys (one per line — repeat for each machine)
+# Add your keys (one per line - repeat for each machine)
 sudo tee -a /home/your-admin-username/.ssh/authorized_keys > /dev/null << 'KEYEOF'
 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA... your-laptop-label
 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA... your-desktop-label
@@ -404,11 +404,11 @@ sudo chown -R your-admin-username:your-admin-username /home/your-admin-username/
 If a laptop or desktop doesn't have an SSH key pair, generate one first:
 
 ```bash
-# On the machine that needs a key (use Ed25519 — it's the strongest option)
+# On the machine that needs a key (use Ed25519 - it's the strongest option)
 ssh-keygen -t ed25519 -a 100 -C "user@laptop-$(date +%Y%m%d)" -f ~/.ssh/id_ed25519
 ```
 
-The `-a 100` flag increases the KDF rounds for the key passphrase, making brute-force harder. **Always set a passphrase** on your key — an unprotected private key on a stolen laptop gives the attacker direct server access.
+The `-a 100` flag increases the KDF rounds for the key passphrase, making brute-force harder. **Always set a passphrase** on your key, because an unprotected private key on a stolen laptop gives the attacker direct server access.
 
 Then deploy it using Option A or B above.
 
@@ -417,7 +417,7 @@ Then deploy it using Option A or B above.
 Open a **new terminal** (keep the current session open as a safety net) and test:
 
 ```bash
-# From your laptop — still using port 22 for now
+# From your laptop (still using port 22 for now)
 ssh -i ~/.ssh/id_ed25519 -p 22 your-admin-username@<SERVER_IP>
 ```
 
@@ -517,7 +517,7 @@ Allow Tailscale traffic through (Tailscale manages its own interface `tailscale0
 sudo ufw allow in on tailscale0 comment "Tailscale overlay network"
 ```
 
-> **Note:** Port 18789 is only open to the Traefik host's LAN IP — not to the internet. Public access goes through Traefik (`claw.example.com` on port 443), and private access goes through the Tailscale mesh. Tailscale traffic is always encrypted with WireGuard and authenticated via your Tailnet identity.
+> **Note:** Port 18789 is only open to the Traefik host's LAN IP, not to the internet. Public access goes through Traefik (`claw.example.com` on port 443), and private access goes through the Tailscale mesh. Tailscale traffic is always encrypted with WireGuard and authenticated via your Tailnet identity.
 
 Enable the firewall:
 
@@ -555,7 +555,7 @@ Unattended-Upgrade::Remove-Unused-Dependencies "true";
 Unattended-Upgrade::Automatic-Reboot "false";
 Unattended-Upgrade::Automatic-Reboot-Time "04:00";
 
-// Mail notifications (optional — set to your address)
+// Mail notifications (optional - set to your address)
 // Unattended-Upgrade::Mail "admin@example.com";
 // Unattended-Upgrade::MailReport "on-change";
 UUEOF
@@ -590,7 +590,7 @@ systemctl list-unit-files --state=enabled --type=service
 Disable services that are not needed (adjust based on your audit):
 
 ```bash
-# Disable Avahi/mDNS daemon if present (OpenClaw has its own mDNS — we disable that too)
+# Disable Avahi/mDNS daemon if present (OpenClaw has its own mDNS, which we disable too)
 sudo systemctl disable --now avahi-daemon.service 2>/dev/null || true
 sudo systemctl disable --now avahi-daemon.socket 2>/dev/null || true
 
@@ -778,18 +778,18 @@ sudo systemctl start apparmor
 
 ## Phase 2: Tailscale Zero-Trust Networking
 
-Tailscale creates an encrypted WireGuard mesh network between your devices. Instead of exposing SSH and the OpenClaw gateway to the public internet, your laptop and desktops connect to the server over Tailscale's private overlay. This dramatically reduces your attack surface — SSH and the OpenClaw dashboard become invisible to the internet entirely.
+Tailscale creates an encrypted WireGuard mesh network between your devices. Instead of exposing SSH and the OpenClaw gateway to the public internet, your laptop and desktops connect to the server over Tailscale's private overlay. This dramatically reduces your attack surface. SSH and the OpenClaw dashboard become invisible to the internet entirely.
 
 ### Why Tailscale
 
 | Without Tailscale | With Tailscale |
 |---|---|
-| SSH port exposed to the internet (even on a custom port, it's discoverable) | SSH listens only on the Tailscale IP — unreachable from the internet |
-| OpenClaw dashboard requires a public domain + TLS + reverse proxy | Dashboard reachable only from tailnet devices and the Traefik LAN — invisible to the internet |
-| Fail2Ban is your only brute-force defense | No brute-force possible — Tailscale authenticates at the network layer before TCP connects |
+| SSH port exposed to the internet (even on a custom port, it's discoverable) | SSH listens only on the Tailscale IP, unreachable from the internet |
+| OpenClaw dashboard requires a public domain + TLS + reverse proxy | Dashboard reachable only from tailnet devices and the Traefik LAN, invisible to the internet |
+| Fail2Ban is your only brute-force defense | No brute-force possible, since Tailscale authenticates at the network layer before TCP connects |
 | You manage TLS certificates | WireGuard encryption is automatic and always-on |
 
-> **Note:** Tailscale complements the other hardening in this guide — it does not replace it. We keep all OS-level hardening, sandboxing, and OpenClaw security settings. Tailscale is an additional layer, consistent with defense-in-depth.
+> **Note:** Tailscale complements the other hardening in this guide; it does not replace it. We keep all OS-level hardening, sandboxing, and OpenClaw security settings. Tailscale is an additional layer, consistent with defense-in-depth.
 
 ### 2.1 Install Tailscale
 
@@ -816,11 +816,11 @@ Before joining the tailnet, generate an auth key so the server can re-authentica
 
 1. Go to [login.tailscale.com/admin/settings/keys](https://login.tailscale.com/admin/settings/keys).
 2. Click **Generate auth key**.
-3. Check **Reusable** — allows the same key to be used after reboots.
+3. Check **Reusable**, which allows the same key to be used after reboots.
 4. Set expiry to **No expiry** (or a long duration like 90 days if your security policy requires rotation).
 5. Copy the generated key (starts with `tskey-auth-`).
 
-> **Warning:** A no-expiry reusable auth key is a long-lived credential. Store it securely — anyone with this key can add a device to your tailnet. If the server is compromised, revoke the key immediately from the admin console. Consider using a 90-day expiry and rotating it alongside your other credentials if your threat model warrants it.
+> **Warning:** A no-expiry reusable auth key is a long-lived credential. Store it securely, because anyone with this key can add a device to your tailnet. If the server is compromised, revoke the key immediately from the admin console. Consider using a 90-day expiry and rotating it alongside your other credentials if your threat model warrants it.
 
 ### 2.3 Authenticate and Join Your Tailnet
 
@@ -832,7 +832,7 @@ sudo tailscale up --ssh --authkey=tskey-auth-XXXXX
 
 Replace `tskey-auth-XXXXX` with the key you generated in the previous step. The `--ssh` flag enables Tailscale SSH, which we will configure next.
 
-> **Note:** With an auth key, there is no browser URL step — the node joins the tailnet immediately. If you prefer interactive authentication instead (browser-based), omit `--authkey` and run `sudo tailscale up --ssh` — you will be given a URL to open in your browser each time the node needs to re-authenticate.
+> **Note:** With an auth key, there is no browser URL step. The node joins the tailnet immediately. If you prefer interactive authentication instead (browser-based), omit `--authkey` and run `sudo tailscale up --ssh`, and you will be given a URL to open in your browser each time the node needs to re-authenticate.
 
 Ensure `tailscaled` starts on boot:
 
@@ -846,7 +846,7 @@ Verify the server has joined the tailnet:
 tailscale status
 ```
 
-You should see your server listed with a `100.x.y.z` Tailscale IP address. Note this IP — you will use it throughout the rest of this guide.
+You should see your server listed with a `100.x.y.z` Tailscale IP address. Note this IP, because you will use it throughout the rest of this guide.
 
 ```bash
 # Save the Tailscale IP for later use
@@ -875,7 +875,7 @@ You should see your server, laptop, and desktop(s) all listed.
 
 Tailscale SSH removes the need to manage SSH keys for server access entirely. Instead of key-based authentication, Tailscale verifies your identity through your tailnet identity provider at the network layer.
 
-> **Note:** This is a strict upgrade over traditional SSH key auth. Your Tailscale identity is tied to your SSO provider (Google, GitHub, Okta), which supports MFA. Traditional SSH keys are bearer tokens — anyone who copies the private key file gets access. Tailscale SSH eliminates this risk.
+> **Note:** This is a strict upgrade over traditional SSH key auth. Your Tailscale identity is tied to your SSO provider (Google, GitHub, Okta), which supports MFA. Traditional SSH keys are bearer tokens, so anyone who copies the private key file gets access. Tailscale SSH eliminates this risk.
 
 #### 2.4.1 Configure Tailscale ACLs for SSH
 
@@ -894,10 +894,10 @@ In the Tailscale admin console ([login.tailscale.com/admin/acls](https://login.t
 }
 ```
 
-- `"action": "check"` — forces re-authentication every 12 hours (most secure). Use `"accept"` if you want persistent sessions.
-- `"src": ["autogroup:member"]` — allows all authenticated members of your tailnet.
-- `"dst": ["tag:server"]` — applies to devices tagged as `server`.
-- `"users": ["your-admin-username"]` — maps to the OS user on the server.
+- `"action": "check"` forces re-authentication every 12 hours (most secure). Use `"accept"` if you want persistent sessions.
+- `"src": ["autogroup:member"]` allows all authenticated members of your tailnet.
+- `"dst": ["tag:server"]` applies to devices tagged as `server`.
+- `"users": ["your-admin-username"]` maps to the OS user on the server.
 
 Tag the server:
 
@@ -956,7 +956,7 @@ sudo sshd -t && sudo systemctl restart ssh
 
 #### 2.4.4 Why Tailscale Serve Is NOT Used in This Setup
 
-> **Important:** Tailscale Serve (which proxies a local service over HTTPS to your tailnet) is **incompatible** with `gateway.bind: "lan"`. OpenClaw enforces that Tailscale Serve/Funnel requires `bind=loopback` (127.0.0.1). Since the Traefik reverse proxy runs on a **separate host** and must reach the gateway over the LAN, `bind=lan` is required — making Tailscale Serve unusable.
+> **Important:** Tailscale Serve (which proxies a local service over HTTPS to your tailnet) is **incompatible** with `gateway.bind: "lan"`. OpenClaw enforces that Tailscale Serve/Funnel requires `bind=loopback` (127.0.0.1). Since the Traefik reverse proxy runs on a **separate host** and must reach the gateway over the LAN, `bind=lan` is required, making Tailscale Serve unusable.
 
 If you ever move the reverse proxy to the **same host** as OpenClaw (or remove it entirely), you could switch to `bind=loopback` and enable Tailscale Serve:
 
@@ -966,8 +966,8 @@ sudo tailscale serve --bg http://127.0.0.1:18789
 ```
 
 In this guide's architecture (cross-host Traefik), dashboard access is provided by:
-- **Traefik** at `https://claw.example.com` (Phase 6) — for any device
-- **SSH tunnel** from your laptop — for emergency/setup access (see Phase 4.5)
+- **Traefik** at `https://claw.example.com` (Phase 6), for any device
+- **SSH tunnel** from your laptop, for emergency/setup access (see Phase 4.5)
 
 #### 2.4.5 Remove Public SSH from Firewall
 
@@ -978,7 +978,7 @@ sudo ufw delete allow 2222/tcp
 sudo ufw status verbose
 ```
 
-SSH is now only reachable through your Tailscale mesh — completely invisible to internet scanners.
+SSH is now only reachable through your Tailscale mesh, completely invisible to internet scanners.
 
 ### 2.5 Enable Tailscale MagicDNS
 
@@ -1023,7 +1023,7 @@ Your SSH keys from Phase 1 still work as a fallback over the Tailscale interface
 
 ### 3.1 Install Node.js 22 via NodeSource
 
-OpenClaw requires Node.js 22 or newer. Install from the official NodeSource repository — not Snap, not the default Ubuntu repository (which ships an older version).
+OpenClaw requires Node.js 22 or newer. Install from the official NodeSource repository, not Snap, not the default Ubuntu repository (which ships an older version).
 
 ```bash
 sudo apt install -y curl gnupg
@@ -1199,7 +1199,7 @@ sudo -u openclaw XDG_RUNTIME_DIR=/run/user/$(id -u openclaw) \
   bash -c 'source /home/openclaw/.openclaw/env && openclaw gateway install && openclaw gateway start'
 ```
 
-> **Note:** The `XDG_RUNTIME_DIR` and `DBUS_SESSION_BUS_ADDRESS` variables are needed because `sudo -u` does not inherit the target user's systemd session. Without them, you will get `Failed to connect to bus: No medium found`. This is a one-time setup — once the gateway service is installed, it starts automatically on boot via the openclaw user's systemd.
+> **Note:** The `XDG_RUNTIME_DIR` and `DBUS_SESSION_BUS_ADDRESS` variables are needed because `sudo -u` does not inherit the target user's systemd session. Without them, you will get `Failed to connect to bus: No medium found`. This is a one-time setup. Once the gateway service is installed, it starts automatically on boot via the openclaw user's systemd.
 
 Verify the gateway is running:
 
@@ -1450,7 +1450,7 @@ The configuration above sets `gateway.bind: "lan"` because the Traefik reverse p
 sudo -u openclaw bash -c 'source /home/openclaw/.openclaw/env && grep -E "(bind|mode.*token)" /home/openclaw/.openclaw/openclaw.json'
 ```
 
-Expected output should show `"lan"` for bind and `"token"` for auth mode. Both are required — LAN binding without token auth is a critical vulnerability.
+Expected output should show `"lan"` for bind and `"token"` for auth mode. Both are required, because LAN binding without token auth is a critical vulnerability.
 
 ### 5.5 Lock Down File Permissions
 
@@ -1460,7 +1460,7 @@ Apply the strictest permissions to the OpenClaw state directory and all contents
 # State directory: only the openclaw user can access it
 sudo chmod 700 /home/openclaw/.openclaw
 
-# Credentials directory: CRITICAL — must not be writable by others
+# Credentials directory: CRITICAL - must not be writable by others
 # The wizard creates this with 775; lock it down to 700.
 sudo chmod 700 /home/openclaw/.openclaw/credentials
 
@@ -1505,7 +1505,7 @@ Standard audit:
 sudo -u openclaw bash -c 'source /home/openclaw/.openclaw/env && openclaw security audit'
 ```
 
-Deep audit (probes the live gateway — start it temporarily):
+Deep audit (probes the live gateway, so start it temporarily):
 
 ```bash
 sudo -u openclaw bash -c 'source /home/openclaw/.openclaw/env && openclaw gateway start'
@@ -1529,11 +1529,11 @@ Review the audit output carefully. Address any warnings or failures before proce
 
 ---
 
-## Phase 6: Reverse Proxy — Traefik (Existing Infrastructure)
+## Phase 6: Reverse Proxy: Traefik (Existing Infrastructure)
 
 > **Note:** Traefik is the primary way to access the OpenClaw dashboard in this setup. Because the gateway uses `bind=lan` (required for cross-host Traefik), Tailscale Serve is not available. If all your access is from Tailscale devices, you can still reach the dashboard directly at `http://10.0.0.X:18789` from within your LAN/tailnet, but Traefik provides TLS and security headers.
 
-This guide assumes you already run a **Traefik reverse proxy on a separate Docker host** with Cloudflare DNS challenge for TLS certificates — the same setup that fronts your other services. The OpenClaw VM (`10.0.0.X`) is a backend target, not a Traefik host. Nothing is installed on the OpenClaw VM in this phase.
+This guide assumes you already run a **Traefik reverse proxy on a separate Docker host** with Cloudflare DNS challenge for TLS certificates, the same setup that fronts your other services. The OpenClaw VM (`10.0.0.X`) is a backend target, not a Traefik host. Nothing is installed on the OpenClaw VM in this phase.
 
 ### 6.1 Architecture
 
@@ -1547,7 +1547,7 @@ Internet → Cloudflare → Traefik host (Docker) → 10.0.0.X:18789 (OpenClaw V
 
 Traefik terminates TLS using Cloudflare-issued certificates, applies security headers and HTTPS redirect middleware, and forwards plain HTTP to the OpenClaw gateway on the LAN. The OpenClaw VM never handles TLS directly.
 
-> **Warning:** Because Traefik runs on a different host, the OpenClaw gateway **cannot** bind to `loopback`. It must bind to `lan` so the Traefik host can reach it over the `10.0.0.x` network. Token authentication is **mandatory** when binding to LAN — this is already configured in Phase 5. This also means **Tailscale Serve cannot be used** — OpenClaw enforces `bind=loopback` when Tailscale Serve/Funnel is active, which is incompatible with cross-host proxying.
+> **Warning:** Because Traefik runs on a different host, the OpenClaw gateway **cannot** bind to `loopback`. It must bind to `lan` so the Traefik host can reach it over the `10.0.0.x` network. Token authentication is **mandatory** when binding to LAN, and this is already configured in Phase 5. This also means **Tailscale Serve cannot be used**, because OpenClaw enforces `bind=loopback` when Tailscale Serve/Funnel is active, which is incompatible with cross-host proxying.
 
 ### 6.2 Add the DNS Record in Cloudflare
 
@@ -1557,7 +1557,7 @@ In your Cloudflare dashboard for `example.com`:
 2. **Type:** `A` (or `CNAME` if pointing to another hostname)
 3. **Name:** `claw`
 4. **Content:** Your Traefik host's public IP (or the IP Cloudflare proxies to)
-5. **Proxy status:** Proxied (orange cloud) — Cloudflare terminates TLS at the edge
+5. **Proxy status:** Proxied (orange cloud). Cloudflare terminates TLS at the edge
 6. **TTL:** Auto
 
 Verify the record resolves:
@@ -1570,7 +1570,7 @@ dig claw.example.com +short
 
 These changes go on your **Traefik Docker host** (not the OpenClaw VM). The files are in your Traefik config directory.
 
-#### 6.3.1 Router and Service — `config.yml`
+#### 6.3.1 Router and Service: `config.yml`
 
 Add the OpenClaw router and service to your existing Traefik file provider config:
 
@@ -1603,7 +1603,7 @@ Add the OpenClaw router and service to your existing Traefik file provider confi
 
 This follows the same pattern as your existing services. The `default-headers` middleware applies your standard security headers (HSTS, XSS filter, content-type nosniff, frame deny). The `https-redirectscheme` middleware forces HTTPS.
 
-#### 6.3.2 Static Config — `traefik.yml`
+#### 6.3.2 Static Config: `traefik.yml`
 
 No changes required to `traefik.yml`. The existing configuration already provides:
 - `:80` → `:443` HTTP-to-HTTPS redirect at the entrypoint level
@@ -1647,7 +1647,7 @@ Change the `bind` value from `"loopback"` to `"lan"`:
   gateway: {
     // Bind to the LAN interface so the Traefik reverse proxy (on a separate
     // host) can reach the gateway. Token authentication is MANDATORY when
-    // binding to LAN — without it, anyone on the 10.0.0.x network can
+    // binding to LAN. Without it, anyone on the 10.0.0.x network can
     // control agents and read session data.
     bind: "lan",
     port: 18789,
@@ -1666,11 +1666,11 @@ Since the gateway now listens on the LAN, firewall it so only the Traefik host c
 # Replace 10.0.0.TRAEFIK with your Traefik host's LAN IP
 sudo ufw allow from 10.0.0.TRAEFIK to any port 18789 proto tcp comment "Traefik reverse proxy to OpenClaw"
 
-# Verify — port 18789 should only be open to the Traefik host
+# Verify: port 18789 should only be open to the Traefik host
 sudo ufw status verbose
 ```
 
-> **Note:** Do NOT use `sudo ufw allow 18789/tcp` — that opens the port to everyone. The `from` clause restricts it to the Traefik host only.
+> **Note:** Do NOT use `sudo ufw allow 18789/tcp`, because that opens the port to everyone. The `from` clause restricts it to the Traefik host only.
 
 ### 6.7 Update Trusted Proxies in OpenClaw
 
@@ -1680,7 +1680,7 @@ The OpenClaw gateway needs to trust `X-Forwarded-For` headers from Traefik. Edit
 sudo -u openclaw nano /home/openclaw/.openclaw/openclaw.json
 ```
 
-Add `trustedProxies` as a **sibling** of `port`, `bind`, `auth`, `tailscale`, and `nodes` inside the `gateway` block — NOT inside the `nodes` block. Place it after the `nodes` closing brace:
+Add `trustedProxies` as a **sibling** of `port`, `bind`, `auth`, `tailscale`, and `nodes` inside the `gateway` block, NOT inside the `nodes` block. Place it after the `nodes` closing brace:
 
 ```json
   "gateway": {
@@ -1702,7 +1702,7 @@ Replace `10.0.0.TRAEFIK` with your Traefik host's actual LAN IP. To find it:
 ssh traefik hostname -I
 ```
 
-> **Note:** `allowTailscale` is not set by the wizard, which means it defaults to `false` — correct for this setup. Only add it explicitly if the security audit flags it.
+> **Note:** `allowTailscale` is not set by the wizard, which means it defaults to `false`, and that is correct for this setup. Only add it explicitly if the security audit flags it.
 
 Restart the gateway to pick up the config change:
 
@@ -1721,13 +1721,13 @@ ss -tlnp | grep 18789
 After reloading Traefik and restarting the OpenClaw gateway:
 
 ```bash
-# From your laptop — test through Cloudflare + Traefik
+# From your laptop (test through Cloudflare + Traefik)
 curl -I https://claw.example.com/
 
-# From the Traefik host — test direct LAN access
+# From the Traefik host (test direct LAN access)
 curl -s -o /dev/null -w "%{http_code}" http://10.0.0.X:18789/
 
-# From the OpenClaw VM — test localhost still works
+# From the OpenClaw VM (test localhost still works)
 curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:18789/
 ```
 
@@ -1735,7 +1735,7 @@ You should see HTTPS responses with all security headers through `claw.example.c
 
 ### 6.9 Pair Your Browser (Device Authentication)
 
-When you first open the dashboard through Traefik, the gateway enforces device pairing. This is the `dmPolicy: "pairing"` security setting — each new browser/device must be approved before it can access the control UI.
+When you first open the dashboard through Traefik, the gateway enforces device pairing. This is the `dmPolicy: "pairing"` security setting, which means each new browser/device must be approved before it can access the control UI.
 
 **Step 1:** Open the dashboard in your browser with the gateway token:
 
@@ -1749,7 +1749,7 @@ Replace `<YOUR_GATEWAY_TOKEN>` with the token from `gateway.auth.token` in your 
 sudo -u openclaw bash -c 'source /home/openclaw/.openclaw/env && grep -A2 '"'"'"auth"'"'"' /home/openclaw/.openclaw/openclaw.json' | grep token
 ```
 
-**Step 2:** The browser will show a "pairing required" or "disconnected (1008): pairing required" message. Keep the browser open — the pairing request is now pending on the gateway.
+**Step 2:** The browser will show a "pairing required" or "disconnected (1008): pairing required" message. Keep the browser open. The pairing request is now pending on the gateway.
 
 **Step 3:** On the OpenClaw VM, list pending node pairing requests:
 
@@ -1775,7 +1775,7 @@ Replace `<REQUEST_ID>` with the ID from the `nodes pending` output.
 
 **Step 5:** Refresh the browser. The dashboard should now load. The approval generates a fresh authentication token for the device.
 
-> **Note:** Each new browser or device you use to access the dashboard will require this pairing process. This is by design — it prevents unauthorized browsers from accessing the control UI even if they have the token. The pairing is stored persistently and survives gateway restarts.
+> **Note:** Each new browser or device you use to access the dashboard will require this pairing process. This is by design, and it prevents unauthorized browsers from accessing the control UI even if they have the token. The pairing is stored persistently and survives gateway restarts.
 
 > **Tip:** The `XDG_RUNTIME_DIR` and `DBUS_SESSION_BUS_ADDRESS` environment variables are required for every `openclaw` command run via `sudo -u openclaw` because the gateway runs as a user-level systemd service. Consider adding a shell alias to simplify this (see below).
 
@@ -2367,7 +2367,7 @@ NEW_TOKEN=$(openssl rand -hex 32)
 echo "New token: ${NEW_TOKEN}"
 
 # Update all clients FIRST with the new token
-# (This depends on your client setup — update environment variables,
+# (This depends on your client setup - update environment variables,
 # config files, or secret managers as appropriate.)
 
 # Then update the server config
@@ -2406,7 +2406,7 @@ systemctl show openclaw-gateway.service --property=MemoryCurrent
 # Tailscale health
 tailscale status
 
-# Open ports (should only show 80, 443 — SSH is on Tailscale only)
+# Open ports (should only show 80, 443 - SSH is on Tailscale only)
 sudo ss -tlnp
 ```
 
@@ -2416,7 +2416,7 @@ sudo ss -tlnp
 
 This is an annotated reference of a production-hardened config. It is based on the actual config schema generated by the OpenClaw onboarding wizard, with security-relevant settings explained.
 
-> **Important:** Do NOT blindly copy-paste this file — it will overwrite your API keys, Brave Search key, and other wizard-generated settings. Use this as a reference to verify and harden your existing config. See [Section 5.3](#53-harden-the-existing-configuration) for the step-by-step process.
+> **Important:** Do NOT blindly copy-paste this file. It will overwrite your API keys, Brave Search key, and other wizard-generated settings. Use this as a reference to verify and harden your existing config. See [Section 5.3](#53-harden-the-existing-configuration) for the step-by-step process.
 
 ```json
 {
@@ -2434,7 +2434,7 @@ This is an annotated reference of a production-hardened config. It is based on t
 
   // --- API KEY PROFILES ---
   // Root-level "auth" is for API provider credentials ONLY.
-  // DO NOT put gateway auth (mode/token) here — that goes under gateway.auth.
+  // DO NOT put gateway auth (mode/token) here. That goes under gateway.auth.
   "auth": {
     "profiles": {
       "anthropic:default": {
@@ -2530,7 +2530,7 @@ This is an annotated reference of a production-hardened config. It is based on t
     },
 
     // DENY COMMANDS: Block canvas/UI commands that a headless server
-    // should never expose. Uses exact command-name matching only —
+    // should never expose. Uses exact command-name matching only, so
     // invalid names are silently ignored.
     "nodes": {
       "denyCommands": [
@@ -2584,7 +2584,7 @@ Use this checklist to verify every hardening step has been completed. Review it 
 - [ ] SSH login verified from laptop/desktop
 - [ ] Internet connectivity confirmed from the VM
 - [ ] `open-vm-tools` installed (not desktop variant)
-- [ ] ESXi web console no longer needed — all work done via SSH
+- [ ] ESXi web console no longer needed (all work done via SSH)
 
 ### OS Hardening
 
@@ -2659,7 +2659,7 @@ Use this checklist to verify every hardening step has been completed. Review it 
 
 - [ ] Gateway token generated and configured
 - [ ] `gateway.auth.mode` is set to `"token"`
-- [ ] `gateway.bind` is set to `"lan"` (required — Traefik is on a separate host)
+- [ ] `gateway.bind` is set to `"lan"` (required because Traefik is on a separate host)
 - [ ] `gateway.controlUi.allowInsecureAuth` is `false`
 - [ ] `gateway.controlUi.dangerouslyDisableDeviceAuth` is `false`
 - [ ] `gateway.trustedProxies` includes Traefik host LAN IP and `100.64.0.0/10`

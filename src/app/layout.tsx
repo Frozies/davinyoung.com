@@ -24,7 +24,7 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   metadataBase: new URL("https://davinyoung.com"),
   title: {
-    default: "Davin Young — Staff Software Engineer, Founder & Patent Holder",
+    default: "Davin Young | Staff Software Engineer, Founder & Patent Holder",
     template: "%s | Davin Young",
   },
   description:
@@ -56,13 +56,13 @@ export const metadata: Metadata = {
     locale: "en_US",
     url: "https://davinyoung.com",
     siteName: "Davin Young",
-    title: "Davin Young — Staff Software Engineer, Founder & Patent Holder",
+    title: "Davin Young | Staff Software Engineer, Founder & Patent Holder",
     description:
       "Full-stack engineer building enterprise platforms, cloud infrastructure, e-commerce, and scalable systems. Two granted US patents. Based in Southwest Florida.",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Davin Young — Staff Software Engineer, Founder & Patent Holder",
+    title: "Davin Young | Staff Software Engineer, Founder & Patent Holder",
     description:
       "Full-stack engineer building enterprise platforms, cloud infrastructure, e-commerce, and scalable systems. Two granted US patents.",
     creator: "@davinyoung",
@@ -127,7 +127,7 @@ const websiteJsonLd = {
   name: "Davin Young",
   url: "https://davinyoung.com",
   description:
-    "Portfolio and blog of Davin Young — Staff Software Engineer, startup founder, and patent holder.",
+    "Portfolio and blog of Davin Young, a Staff Software Engineer, startup founder, and patent holder.",
   author: { "@id": "https://davinyoung.com/#person" },
 };
 

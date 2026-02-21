@@ -21,7 +21,7 @@ export function GET() {
   <channel>
     <title>Davin Young</title>
     <link>${siteUrl}</link>
-    <description>Blog posts by Davin Young — software engineering, security, and infrastructure.</description>
+    <description>Blog posts by Davin Young on software engineering, security, and infrastructure.</description>
     <language>en-us</language>
     <lastBuildDate>${posts.length > 0 ? new Date(posts[0].date).toUTCString() : new Date().toUTCString()}</lastBuildDate>
     <atom:link href="${siteUrl}/feed.xml" rel="self" type="application/rss+xml" />

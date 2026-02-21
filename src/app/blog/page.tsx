@@ -8,7 +8,7 @@ import BlogPostCard from "@/components/BlogPostCard";
 export const metadata: Metadata = {
   title: "Blog",
   description:
-    "Articles on software engineering, DevOps, infrastructure, e-commerce, startup lessons, and building real products — by Davin Young.",
+    "Articles on software engineering, DevOps, infrastructure, e-commerce, startup lessons, and building real products. Written by Davin Young.",
   alternates: {
     canonical: "https://davinyoung.com/blog",
   },

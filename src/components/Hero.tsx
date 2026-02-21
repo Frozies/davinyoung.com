@@ -31,7 +31,7 @@ export default function Hero() {
 
         <div className="animate-fade-up animation-delay-200">
           <p className="mt-6 text-base sm:text-lg text-muted max-w-2xl mx-auto leading-relaxed">
-            Full-stack engineer who builds across the entire stack — enterprise platforms,
+            Full-stack engineer who builds across the entire stack: enterprise platforms,
             e-commerce, infrastructure, and everything in between.
             Two granted US patents. Multiple startups. From Hyperledger networks to Shopify storefronts.
           </p>

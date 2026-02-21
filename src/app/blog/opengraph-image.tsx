@@ -83,7 +83,7 @@ export default function OGImage() {
             }}
           >
             Articles on software engineering, DevOps, infrastructure, e-commerce,
-            startup lessons, and building real products — by Davin Young.
+            startup lessons, and building real products. Written by Davin Young.
           </div>
         </div>
 

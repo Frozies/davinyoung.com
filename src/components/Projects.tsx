@@ -21,8 +21,8 @@ const projects = [
     ],
     links: [
       { label: "Website", href: "https://securetap.io" },
-      { label: "Patent 1 — US 12,437,308 B2", href: "https://patents.google.com/patent/US12437308B2/" },
-      { label: "Patent 2 — US 2025/0285126 A1", href: "https://patents.google.com/patent/US20250285126A1/" },
+      { label: "Patent 1 (US 12,437,308 B2)", href: "https://patents.google.com/patent/US12437308B2/" },
+      { label: "Patent 2 (US 2025/0285126 A1)", href: "https://patents.google.com/patent/US20250285126A1/" },
     ],
   },
   {

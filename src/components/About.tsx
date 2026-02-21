@@ -42,7 +42,7 @@ export default function About() {
           {/* Bio */}
           <ScrollReveal delay={100} className="space-y-5 text-muted leading-relaxed">
             <p>
-              I&apos;m Davin Young — a Staff Software Engineer and founder based in
+              I&apos;m Davin Young, a Staff Software Engineer and founder based in
               Southwest Florida. I like building things end-to-end: backend services,
               cloud infrastructure, storefronts, and the glue in between.
             </p>
@@ -69,7 +69,7 @@ export default function About() {
               picked up two granted US patents.
             </p>
             <p>
-              I&apos;m most at home deep in infrastructure — debugging Docker containers at
+              I&apos;m most at home deep in infrastructure, whether that&apos;s debugging Docker containers at
               2am, setting up CI/CD pipelines, or standing up new services on AWS. I care
               about systems that are reliable, well-tested, and simple enough to hand off.
             </p>

@@ -11,7 +11,7 @@ const homePageJsonLd = {
   "@type": "ProfilePage",
   "@id": "https://davinyoung.com/#profilepage",
   mainEntity: { "@id": "https://davinyoung.com/#person" },
-  name: "Davin Young — Staff Software Engineer, Founder & Patent Holder",
+  name: "Davin Young | Staff Software Engineer, Founder & Patent Holder",
   description:
     "Portfolio of Davin Young, a full-stack engineer building enterprise platforms, cloud infrastructure, e-commerce, and scalable systems.",
   url: "https://davinyoung.com",

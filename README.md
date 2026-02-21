@@ -1,6 +1,6 @@
 # davinyoung.com
 
-Personal portfolio and blog for Davin Young — Staff Software Engineer, Founder, and US Patent Holder.
+Personal portfolio and blog for Davin Young, a Staff Software Engineer, Founder, and US Patent Holder.
 
 ## Tech Stack
 

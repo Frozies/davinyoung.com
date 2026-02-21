@@ -38,7 +38,7 @@ const patents = [
     serial: "19/218492",
     date: "Filed May 26, 2025",
     summary:
-      "Continuation directed to NFC tag encoding embodiments — covers the process of writing unique cryptographic identifiers to tags and creating tap-unique URLs that produce sequential, immutable verification records using AES-128 encryption.",
+      "Continuation focused on NFC tag encoding embodiments. Covers the process of writing unique cryptographic identifiers to tags and creating tap-unique URLs that produce sequential, immutable verification records using AES-128 encryption.",
     link: "https://patents.google.com/patent/US20250285126A1/",
   },
 ];
