@@ -4,7 +4,7 @@ import Giscus from "@giscus/react";
 
 export default function Comments() {
   return (
-    <section className="mt-16 pt-10 border-t border-border">
+    <section id="comments" className="mt-16 pt-10 border-t border-border scroll-mt-24">
       <h2 className="text-xl font-bold text-white mb-6">Comments</h2>
       <Giscus
         repo="Frozies/davinyoung.com"
