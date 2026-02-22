@@ -11,6 +11,7 @@ export interface TOCItem {
 export default function TableOfContents({ items }: { items: TOCItem[] }) {
   const [activeId, setActiveId] = useState<string>("");
   const [isOpen, setIsOpen] = useState(false);
+  const [hidden, setHidden] = useState(false);
   const observerRef = useRef<IntersectionObserver | null>(null);
 
   useEffect(() => {
@@ -33,6 +34,18 @@ export default function TableOfContents({ items }: { items: TOCItem[] }) {
     return () => observerRef.current?.disconnect();
   }, [items]);
 
+  useEffect(() => {
+    const footer = document.querySelector("footer");
+    if (!footer) return;
+
+    const obs = new IntersectionObserver(
+      ([entry]) => setHidden(entry.isIntersecting),
+      { threshold: 0 }
+    );
+    obs.observe(footer);
+    return () => obs.disconnect();
+  }, []);
+
   if (items.length === 0) return null;
 
   return (
@@ -40,7 +53,7 @@ export default function TableOfContents({ items }: { items: TOCItem[] }) {
       {/* Mobile toggle */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="xl:hidden fixed bottom-8 left-8 z-40 p-3 rounded-full bg-surface border border-border text-muted hover:text-amber hover:border-amber/30 transition-all duration-300 shadow-lg"
+        className={`xl:hidden fixed bottom-8 left-8 z-40 p-3 rounded-full bg-surface border border-border text-muted hover:text-amber hover:border-amber/30 transition-all duration-300 shadow-lg ${hidden ? "opacity-0 pointer-events-none" : ""}`}
         aria-label="Toggle table of contents"
       >
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -83,7 +96,7 @@ export default function TableOfContents({ items }: { items: TOCItem[] }) {
 
       {/* Desktop sidebar */}
       <nav
-        className="hidden xl:block fixed top-28 right-[max(2rem,calc((100vw-768px)/2-320px))] w-64 max-h-[calc(100vh-10rem)] overflow-y-auto"
+        className={`hidden xl:block fixed top-28 right-[max(2rem,calc((100vw-768px)/2-320px))] w-64 max-h-[calc(100vh-10rem)] overflow-y-auto transition-opacity duration-300 ${hidden ? "opacity-0 pointer-events-none" : ""}`}
         aria-label="Table of contents"
       >
         <p className="text-xs font-semibold text-muted uppercase tracking-wider mb-3">
