@@ -13,6 +13,7 @@ import BackToTop from "@/components/BackToTop";
 import TableOfContents from "@/components/TableOfContents";
 import ReadingStats from "@/components/ReadingStats";
 import RelatedPosts from "@/components/RelatedPosts";
+import Comments from "@/components/Comments";
 import { getAllSlugs, getPostBySlug, extractTOC, getRelatedPosts } from "@/lib/mdx";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
@@ -171,6 +172,7 @@ export default async function BlogPost({ params }: Props) {
           </div>
 
           <RelatedPosts posts={relatedPosts} />
+          <Comments />
         </article>
       </main>
       <Footer />
